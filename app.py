@@ -20,6 +20,9 @@ def main():
         initial_sidebar_state="collapsed",
     )
     
+    # 세션 상태 초기화 (로컬 스토리지에서 컨텐츠 복원 포함)
+    SessionManager.init_session_state()
+    
     # 커스텀 CSS 추가
     st.markdown("""
     <style>

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-The Automated Course Content Generator (ACCG) is a Streamlit-based AI application that helps educators and content creators generate comprehensive course content using OpenAI's GPT models. The application follows a multi-stage AI pipeline to create course outlines, detailed lessons, and quizzes.
+The Automated Course Content Generator (ACCG) is a Streamlit-based AI application that helps educators and content creators generate comprehensive course content using OpenAI's GPT models. The application follows a multi-stage AI pipeline to create course outlines, detailed lessons, and quizzes. The application now supports multiple output formats including HTML, PPT-style slides, and PowerPoint presentations.
 
 ## Development Commands
 
@@ -146,11 +146,12 @@ The application uses specialized AI "agents" in sequence:
 - **Attribution**: Automatic credit generation following Unsplash guidelines
 - **HTML Integration**: Responsive image containers with proper styling
 
-### PDF Export Architecture
+### Multi-Format Export Architecture
 
-- FPDF library creates formatted downloadable content
-- Base64 encoding enables in-browser downloads
-- Structured content organization with lessons and quizzes
+- **PDF Export**: FPDF library creates formatted downloadable content with Base64 encoding for in-browser downloads
+- **Slide Generation**: Interactive HTML slides with PPT-style navigation, keyboard controls, and responsive design
+- **PowerPoint Export**: python-pptx library generates native PPTX files with proper formatting and structure
+- **Mobile View**: Responsive mobile-optimized display for all content types
 
 ## Technology Stack
 
@@ -161,6 +162,7 @@ The application uses specialized AI "agents" in sequence:
   - OpenRouter: Claude, Llama, Gemini, and other models
 - **Unsplash API**: High-quality educational image sourcing
 - **FPDF**: PDF creation and formatting
+- **python-pptx**: PowerPoint presentation generation
 - **python-dotenv**: Environment variable management
 - **shelve**: Local data persistence
 - **requests**: HTTP client for API communications
@@ -169,12 +171,19 @@ The application uses specialized AI "agents" in sequence:
 
 ```
 ├── app.py                 # Main Streamlit application
+├── src/                  # Source code directory
+│   ├── config/           # Configuration modules
+│   ├── models/           # Data models and types
+│   ├── services/         # Business logic services
+│   │   ├── ai_service.py      # AI content generation
+│   │   ├── slide_generator.py # HTML slide generation
+│   │   ├── ppt_generator.py   # PowerPoint generation
+│   │   └── export_service.py  # Export functionality
+│   ├── templates/        # HTML templates for slide generation
+│   ├── ui/               # User interface components
+│   └── utils/            # Utility functions
 ├── prompts/              # AI prompt modules
-│   ├── tabler_prompt.py   # Course outline generation
-│   ├── dictator_prompt.py # Structure conversion
-│   └── quizzy_prompt.py   # Quiz generation
 ├── .streamlit/           # Streamlit configuration
-│   └── config.toml       # UI theme settings
 ├── requirements.txt      # Python dependencies
 └── venv/                # Virtual environment (not committed)
 ```

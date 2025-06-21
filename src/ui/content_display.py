@@ -10,6 +10,8 @@ from src.models.content_types import CourseConfig, GeneratedContent
 from src.services.ai_service import ai_service
 from src.services.image_service import image_service
 from src.services.export_service import export_service
+from src.services.slide_generator import slide_generator
+from src.services.ppt_generator import ppt_generator
 from src.utils.session_manager import SessionManager
 from src.utils.validators import Validators
 
@@ -23,7 +25,9 @@ class ContentDisplayUI:
         st.markdown('<h2 class="content-header">생성된 교과서 컨텐츠 📝</h2>', unsafe_allow_html=True)
         
         # 컨텐츠 생성 버튼이 클릭되었을 때
-        if config.get("generate_button") and not SessionManager.get_session_value("content_generated"):
+        if config.get("generate_button"):
+            # 새 생성 요청 표시
+            SessionManager.mark_new_generation()
             ContentDisplayUI._generate_content(config)
         
         # 생성된 컨텐츠 표시
@@ -68,26 +72,84 @@ class ContentDisplayUI:
         messages = SessionManager.get_session_value("messages")
         messages.append({"role": "user", "content": course_config.to_prompt_string()})
         
+        # PPT 전용 생성인지 확인
+        export_format = config.get("export_format", "HTML")
+        is_presentation_only = export_format == "PPT"
+        
         # 컨텐츠 생성
-        with st.spinner("디지털 교과서 컨텐츠를 생성중입니다... 📚"):
+        spinner_text = "슬라이드를 생성중입니다... 🎯" if is_presentation_only else "디지털 교과서 컨텐츠를 생성중입니다... 📚"
+        
+        with st.spinner(spinner_text):
             try:
-                # AI를 통한 컨텐츠 생성
-                generated_content = ai_service.generate_content(course_config)
+                if is_presentation_only:
+                    # PPT 전용 생성
+                    generated_content = ai_service.generate_content(course_config)
+                    
+                    # 슬라이드 생성기에 AI 클라이언트 전달
+                    slide_gen = slide_generator
+                    slide_gen.ai_client = ai_service.client
+                    
+                    # 퀴즈 데이터 처리
+                    quiz_data = []
+                    if generated_content.quiz_content:
+                        if isinstance(generated_content.quiz_content, str):
+                            # 문자열인 경우 간단한 파싱
+                            quiz_lines = generated_content.quiz_content.split('\n')
+                            for line in quiz_lines:
+                                if line.strip() and '?' in line:
+                                    quiz_data.append({
+                                        'question': line.strip(),
+                                        'options': ['A', 'B', 'C', 'D'],
+                                        'correct_answer': 'A'
+                                    })
+                        elif isinstance(generated_content.quiz_content, list):
+                            quiz_data = generated_content.quiz_content
+                    
+                    # 슬라이드 HTML 생성
+                    course_data = {
+                        'title': f"{course_config.grade} {course_config.subject} - {course_config.unit_name}",
+                        'subject': course_config.subject,
+                        'education_level': course_config.grade,
+                        'modules': {course_config.unit_name: generated_content.main_content},
+                        'quizzes': {course_config.unit_name: quiz_data}
+                    }
+                    
+                    slide_html = slide_gen.generate_slides_html(course_data)
+                    
+                    # 세션에 슬라이드 저장
+                    SessionManager.set_session_value("generated_content", slide_html)
+                    SessionManager.set_session_value("is_presentation", True)
+                    
+                    # 로컬 스토리지에 저장
+                    SessionManager.save_content_to_storage(slide_html, True)
+                    
+                else:
+                    # 기존 HTML 방식 생성
+                    generated_content = ai_service.generate_content(course_config)
+                    
+                    # 전체 HTML 포맷팅
+                    full_html = ContentDisplayUI._format_full_content(
+                        config, 
+                        generated_content,
+                        course_config.subject
+                    )
+                    
+                    # 세션에 저장
+                    SessionManager.set_session_value("generated_content", full_html)
+                    SessionManager.set_session_value("is_presentation", False)
+                    
+                    # 로컬 스토리지에 저장
+                    SessionManager.save_content_to_storage(full_html, False)
                 
-                # 전체 HTML 포맷팅
-                full_html = ContentDisplayUI._format_full_content(
-                    config, 
-                    generated_content,
-                    course_config.subject
-                )
-                
-                # 세션에 저장
-                SessionManager.set_session_value("generated_content", full_html)
                 SessionManager.set_session_value("content_generated", True)
                 SessionManager.save_chat_history(messages)
                 
-                st.success("컨텐츠가 성공적으로 생성되었습니다! ✨")
-                st.experimental_rerun()
+                # 새 생성 플래그 초기화
+                SessionManager.clear_new_generation_flag()
+                
+                success_text = "슬라이드가 성공적으로 생성되었습니다! 🎯" if is_presentation_only else "컨텐츠가 성공적으로 생성되었습니다! ✨"
+                st.success(success_text)
+                st.rerun()
                 
             except Exception as e:
                 st.error(f"컨텐츠 생성 중 오류가 발생했습니다: {str(e)}")
@@ -119,12 +181,33 @@ class ContentDisplayUI:
     def _display_generated_content() -> None:
         """생성된 컨텐츠 표시"""
         generated_content = SessionManager.get_session_value("generated_content")
+        is_presentation = SessionManager.get_session_value("is_presentation", False)
         
         # HTML 이스케이프 해제 (필요한 경우)
         if generated_content and '&lt;' in generated_content:
             generated_content = html.unescape(generated_content)
         
-        # 미리보기
+        # PPT인 경우 다른 방식으로 표시
+        if is_presentation:
+            st.markdown("### 🎯 생성된 슬라이드")
+            
+            # 슬라이드 미리보기
+            with st.expander("슬라이드 미리보기", expanded=True):
+                # 슬라이드 HTML을 iframe으로 표시
+                components.html(generated_content, height=600, scrolling=True)
+            
+            # 다운로드 버튼
+            st.download_button(
+                label="슬라이드 HTML 다운로드",
+                data=generated_content,
+                file_name="slides.html",
+                mime="text/html",
+                help="슬라이드를 HTML 파일로 다운로드합니다"
+            )
+            
+            return
+        
+        # 기존 방식 (일반 교과서 컨텐츠)
         with st.expander("생성된 컨텐츠 미리보기"):
             # HTML 컨텐츠를 위한 전체 스타일과 함께 렌더링
             full_html = f"""
@@ -217,6 +300,261 @@ class ContentDisplayUI:
             # HTML 컴포넌트로 렌더링
             components.html(full_html, height=800, scrolling=True)
         
+        # 보기 모드 선택
+        st.markdown("### 📋 보기 모드 선택")
+        view_mode = st.radio(
+            "컨텐츠를 어떤 형태로 보시겠습니까?",
+            ["📄 기본 보기", "🎬 슬라이드 보기", "📱 모바일 보기"],
+            horizontal=True
+        )
+        
+        if view_mode == "🎬 슬라이드 보기":
+            ContentDisplayUI._show_slide_view()
+        elif view_mode == "📱 모바일 보기":
+            ContentDisplayUI._show_mobile_view()
+        
         # 다운로드 버튼
+        st.markdown("### 💾 다운로드 옵션")
+        
+        # 기본 다운로드 (HTML/PDF)
         export_format = SessionManager.get_session_value("export_format")
-        export_service.create_download_buttons(generated_content, export_format) 
+        ContentDisplayUI._create_basic_download_buttons(generated_content, export_format)
+        
+        # 추가 다운로드 옵션
+        st.markdown("#### 🎯 추가 다운로드 옵션")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🎬 슬라이드 HTML 다운로드"):
+                ContentDisplayUI._download_slide_html()
+        
+        with col2:
+            if st.button("📄 PPT 다운로드"):
+                ContentDisplayUI._download_ppt()
+    
+    @staticmethod
+    def _show_slide_view() -> None:
+        """슬라이드 형태로 컨텐츠 표시"""
+        st.markdown("### 🎬 슬라이드 프레젠테이션")
+        st.info("키보드 화살표 키나 하단 버튼을 사용해 슬라이드를 넘겨보세요!")
+        
+        # 저장된 컨텐츠를 슬라이드 데이터로 변환
+        slide_data = ContentDisplayUI._convert_content_to_slide_data()
+        
+        if slide_data:
+            # 슬라이드 HTML 생성
+            slide_html = slide_generator.generate_slides_html(slide_data)
+            
+            # 슬라이드 컴포넌트 렌더링
+            components.html(slide_html, height=700, scrolling=False)
+        else:
+            st.warning("슬라이드를 생성할 수 있는 컨텐츠가 없습니다.")
+    
+    @staticmethod
+    def _show_mobile_view() -> None:
+        """모바일 친화적인 형태로 컨텐츠 표시"""
+        st.markdown("### 📱 모바일 보기")
+        
+        generated_content = SessionManager.get_session_value("generated_content")
+        if generated_content:
+            # 모바일 최적화 스타일 적용
+            mobile_html = f"""
+            <!DOCTYPE html>
+            <html lang="ko">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        line-height: 1.6;
+                        margin: 0;
+                        padding: 10px;
+                        background-color: #f8f9fa;
+                    }}
+                    .mobile-container {{
+                        max-width: 100%;
+                        background: white;
+                        border-radius: 12px;
+                        padding: 16px;
+                        margin-bottom: 16px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    }}
+                    h1 {{ font-size: 1.5em; color: #2c3e50; }}
+                    h2 {{ font-size: 1.3em; color: #34495e; }}
+                    h3 {{ font-size: 1.1em; color: #7f8c8d; }}
+                    p {{ font-size: 1em; margin: 12px 0; }}
+                    .image-container {{
+                        text-align: center;
+                        margin: 16px 0;
+                    }}
+                    .image-container img {{
+                        max-width: 100%;
+                        height: auto;
+                        border-radius: 8px;
+                    }}
+                    .interactive, .quiz {{
+                        background: #e8f4f8;
+                        padding: 16px;
+                        border-radius: 8px;
+                        margin: 16px 0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="mobile-container">
+                    {generated_content}
+                </div>
+            </body>
+            </html>
+            """
+            
+            components.html(mobile_html, height=600, scrolling=True)
+        else:
+            st.warning("표시할 컨텐츠가 없습니다.")
+    
+    @staticmethod
+    def _convert_content_to_slide_data() -> dict:
+        """저장된 컨텐츠를 슬라이드 데이터 형태로 변환"""
+        # 세션에서 원본 데이터 가져오기
+        generated_content = SessionManager.get_session_value("generated_content")
+        if not generated_content:
+            return None
+        
+        # 기본 구조 생성
+        slide_data = {
+            'title': SessionManager.get_session_value("unit_name", "디지털 교과서"),
+            'subject': SessionManager.get_session_value("subject", ""),
+            'education_level': SessionManager.get_session_value("grade", ""),
+            'modules': {},
+            'quizzes': {}
+        }
+        
+        # HTML에서 모듈 정보 추출 (간단한 파싱)
+        import re
+        
+        # 제목들을 찾아서 모듈로 구성
+        h2_titles = re.findall(r'<h2[^>]*>(.*?)</h2>', generated_content, re.IGNORECASE)
+        h3_titles = re.findall(r'<h3[^>]*>(.*?)</h3>', generated_content, re.IGNORECASE)
+        
+        # 컨텐츠를 섹션별로 분할
+        sections = re.split(r'<h[23][^>]*>.*?</h[23]>', generated_content, flags=re.IGNORECASE)
+        
+        # 모듈 구성
+        module_count = 1
+        for i, title in enumerate(h2_titles[:5]):  # 최대 5개 모듈
+            clean_title = re.sub(r'<[^>]+>', '', title).strip()
+            if clean_title:
+                slide_data['modules'][f"모듈 {module_count}: {clean_title}"] = sections[i + 1] if i + 1 < len(sections) else ""
+                module_count += 1
+        
+        # 기본 모듈이 없으면 전체 컨텐츠를 하나의 모듈로
+        if not slide_data['modules']:
+            slide_data['modules']['주요 내용'] = generated_content
+        
+        # 퀴즈 데이터 추가 (간단한 예시)
+        if '퀴즈' in generated_content.lower() or 'quiz' in generated_content.lower():
+            slide_data['quizzes']['퀴즈'] = [
+                {
+                    'question': '학습한 내용을 복습해보세요.',
+                    'options': ['옵션 1', '옵션 2', '옵션 3', '옵션 4'],
+                    'correct_answer': '옵션 1'
+                }
+            ]
+        
+        return slide_data
+    
+    @staticmethod
+    def _download_slide_html() -> None:
+        """슬라이드 HTML 파일 다운로드"""
+        slide_data = ContentDisplayUI._convert_content_to_slide_data()
+        
+        if slide_data:
+            # 슬라이드 HTML 생성
+            slide_html = slide_generator.generate_slides_html(slide_data)
+            
+            # 다운로드 링크 생성
+            download_link = slide_generator.get_html_download_link(
+                slide_html, 
+                f"{slide_data['title']}_slides.html"
+            )
+            
+            st.markdown(
+                f'<a href="{download_link}" download="{slide_data["title"]}_slides.html" '
+                f'style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); '
+                f'color: white; padding: 12px 24px; text-decoration: none; '
+                f'border-radius: 8px; font-weight: bold; display: inline-block;">'
+                f'🎬 슬라이드 HTML 다운로드</a>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.error("슬라이드를 생성할 수 있는 컨텐츠가 없습니다.")
+    
+    @staticmethod
+    def _download_ppt() -> None:
+        """PowerPoint 파일 다운로드"""
+        if not ppt_generator.is_available:
+            st.error("PowerPoint 생성 기능을 사용하려면 python-pptx 패키지가 필요합니다.")
+            st.code("pip install python-pptx")
+            return
+        
+        slide_data = ContentDisplayUI._convert_content_to_slide_data()
+        
+        if slide_data:
+            with st.spinner("PowerPoint 파일을 생성중입니다..."):
+                try:
+                    ppt_file_path = ppt_generator.generate_ppt(slide_data)
+                    
+                    if ppt_file_path:
+                        # 파일을 바이너리로 읽어서 다운로드 제공
+                        with open(ppt_file_path, "rb") as f:
+                            ppt_data = f.read()
+                        
+                        st.download_button(
+                            label="📄 PowerPoint 다운로드",
+                            data=ppt_data,
+                            file_name=f"{slide_data['title']}_presentation.pptx",
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                        )
+                        st.success("PowerPoint 파일이 생성되었습니다!")
+                    else:
+                        st.error("PowerPoint 파일 생성에 실패했습니다.")
+                        
+                except Exception as e:
+                    st.error(f"PowerPoint 생성 중 오류가 발생했습니다: {str(e)}")
+        else:
+            st.error("PowerPoint를 생성할 수 있는 컨텐츠가 없습니다.")
+    
+    @staticmethod
+    def _create_basic_download_buttons(content: str, format_type: str) -> None:
+        """기본 다운로드 버튼 생성 (컬럼 중첩 방지)"""
+        from src.models.content_types import ExportFormat
+        
+        # HTML 다운로드
+        if format_type in [ExportFormat.HTML.value, ExportFormat.BOTH.value]:
+            # HTML 파일 생성
+            html_file = export_service.generate_html(content, "digital_textbook.html")
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_data = f.read()
+            st.download_button(
+                label="HTML로 다운로드 🌐",
+                data=html_data,
+                file_name="digital_textbook.html",
+                mime="text/html"
+            )
+        
+        # PDF 다운로드
+        if format_type in [ExportFormat.PDF.value, ExportFormat.BOTH.value]:
+            try:
+                # PDF 파일 생성
+                pdf_file = export_service.generate_pdf(content, "digital_textbook.pdf")
+                with open(pdf_file, 'rb') as f:
+                    pdf_data = f.read()
+                st.download_button(
+                    label="PDF로 다운로드 📄",
+                    data=pdf_data,
+                    file_name="digital_textbook.pdf",
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"PDF 생성 중 오류가 발생했습니다: {str(e)}") 

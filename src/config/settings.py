@@ -6,7 +6,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 # 환경 변수 로드
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Settings:
@@ -17,16 +17,39 @@ class Settings:
     PAGE_ICON = "📚"
     LAYOUT = "wide"
     
-    # AI 제공자 설정
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-    OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:latest")
-    DEFAULT_PROVIDER = os.getenv("MODEL_SELECTION", "openai")
+    # AI 제공자 설정 (동적 속성)
+    @property
+    def OPENAI_API_KEY(self):
+        return os.getenv("OPENAI_API_KEY")
+    
+    @property
+    def OPENROUTER_API_KEY(self):
+        return os.getenv("OPENROUTER_API_KEY")
+    
+    @property
+    def OPENROUTER_BASE_URL(self):
+        return os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    
+    @property
+    def OPENROUTER_DEFAULT_MODEL(self):
+        return os.getenv("OPENROUTER_DEFAULT_MODEL", "openai/gpt-4")
+    
+    @property
+    def OLLAMA_HOST(self):
+        return os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    
+    @property
+    def OLLAMA_DEFAULT_MODEL(self):
+        return os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:latest")
+    
+    @property
+    def DEFAULT_PROVIDER(self):
+        return os.getenv("MODEL_SELECTION", "openai")
     
     # Unsplash API 설정
-    UNSPLASH_API_KEY = os.getenv("UNSPLASH_API_KEY")
+    @property
+    def UNSPLASH_API_KEY(self):
+        return os.getenv("UNSPLASH_API_KEY")
     
     # 모델 옵션
     MODEL_OPTIONS: Dict[str, list] = {
@@ -38,7 +61,8 @@ class Settings:
             "anthropic/claude-3-haiku",
             "anthropic/claude-3-sonnet",
             "meta-llama/llama-3.1-8b-instruct",
-            "google/gemini-pro"
+            "google/gemini-pro",
+            "google/gemini-2.5-flash-lite-preview-06-17"
         ],
         "ollama": ["gemma3:latest", "llama3.2", "llama3.1", "codellama", "mistral", "qwen2.5"]
     }
@@ -49,7 +73,7 @@ class Settings:
     SEMESTERS = ["1학기", "2학기"]
     CONTENT_TYPES = ["개념 설명", "예시 문제", "상호작용 활동", "시각 자료", "퀴즈", "게임형 학습"]
     DEFAULT_CONTENT_TYPES = ["개념 설명", "예시 문제", "상호작용 활동", "퀴즈"]
-    EXPORT_FORMATS = ["HTML", "PDF", "둘 다"]
+    EXPORT_FORMATS = ["HTML", "PDF", "PPT", "둘 다"]
     
     # 파일 설정
     CHAT_HISTORY_FILE = "chat_history"

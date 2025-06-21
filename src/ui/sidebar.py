@@ -19,6 +19,18 @@ class SidebarUI:
         if st.button("대화 기록 삭제"):
             SessionManager.clear_chat_history()
         
+        # 환경 변수 다시 로드 버튼
+        if st.button("환경 변수 다시 로드"):
+            # 세션 상태 AI 설정 초기화
+            if "ai_provider" in st.session_state:
+                del st.session_state["ai_provider"]
+            if "ai_model" in st.session_state:
+                del st.session_state["ai_model"]
+            # 환경 변수 다시 로드
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+            st.rerun()
+        
         st.header("교과서 설정 📋")
         
         # AI 설정
@@ -57,13 +69,23 @@ class SidebarUI:
             "AI 제공자 선택",
             provider_options,
             index=provider_options.index(current_provider),
-            help="사용할 AI 제공자를 선택하세요"
+            help="사용할 AI 제공자를 선택하세요",
+            key="provider_select"
         )
         
         # 제공자 변경시 처리
         if selected_provider != current_provider:
-            SessionManager.update_ai_settings(selected_provider, "")
+            # 제공자별 기본 모델 설정
+            if selected_provider == "openai":
+                default_model_for_provider = "gpt-4"
+            elif selected_provider == "openrouter":
+                default_model_for_provider = settings.OPENROUTER_DEFAULT_MODEL
+            else:  # ollama
+                default_model_for_provider = settings.OLLAMA_DEFAULT_MODEL
+            
+            SessionManager.update_ai_settings(selected_provider, default_model_for_provider)
             ai_service.initialize_client(selected_provider)
+            st.rerun()  # UI 즉시 업데이트를 위한 rerun
         
         # 모델 선택
         model_options = settings.MODEL_OPTIONS.get(selected_provider, [])
@@ -73,14 +95,40 @@ class SidebarUI:
             if available_models:
                 model_options = available_models
         
-        current_model = SessionManager.get_session_value("ai_model", model_options[0] if model_options else "")
         
-        selected_model = st.selectbox(
-            "AI 모델 선택",
-            model_options,
-            index=model_options.index(current_model) if current_model in model_options else 0,
-            help="컨텐츠 생성에 사용할 AI 모델을 선택하세요"
-        )
+        # 기본 모델 설정
+        default_model = ""
+        if selected_provider == "openai":
+            default_model = "gpt-4"
+        elif selected_provider == "openrouter":
+            default_model = settings.OPENROUTER_DEFAULT_MODEL
+        elif selected_provider == "ollama":
+            default_model = settings.OLLAMA_DEFAULT_MODEL
+        
+        current_model = SessionManager.get_session_value("ai_model", default_model)
+        
+        # 현재 모델이 모델 옵션에 없으면 추가
+        if current_model and current_model not in model_options:
+            model_options = [current_model] + model_options
+        
+        # 모델 입력 방식 선택
+        model_input_type = st.radio("모델 선택 방식", ["목록에서 선택", "직접 입력"], horizontal=True)
+        
+        if model_input_type == "목록에서 선택":
+            selected_model = st.selectbox(
+                "AI 모델 선택",
+                model_options,
+                index=model_options.index(current_model) if current_model in model_options else 0,
+                help="컨텐츠 생성에 사용할 AI 모델을 선택하세요",
+                key=f"model_select_{selected_provider}"
+            )
+        else:
+            selected_model = st.text_input(
+                "AI 모델명 직접 입력",
+                value=current_model,
+                help="사용할 모델명을 직접 입력하세요 (예: google/gemini-2.5-flash-lite-preview-06-17)",
+                key=f"model_input_{selected_provider}"
+            )
         
         SessionManager.update_ai_settings(selected_provider, selected_model)
         
@@ -151,7 +199,7 @@ class SidebarUI:
                 
                 if new_content_button:
                     SessionManager.reset_content_generation()
-                    st.experimental_rerun()
+                    st.rerun()
         
         return {
             "generate_button": generate_button,
