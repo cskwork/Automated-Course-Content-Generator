@@ -2,6 +2,8 @@
 컨텐츠 표시 UI 컴포넌트
 """
 import streamlit as st
+import streamlit.components.v1 as components
+import html
 from typing import Dict, Any
 
 from src.models.content_types import CourseConfig, GeneratedContent
@@ -118,9 +120,102 @@ class ContentDisplayUI:
         """생성된 컨텐츠 표시"""
         generated_content = SessionManager.get_session_value("generated_content")
         
+        # HTML 이스케이프 해제 (필요한 경우)
+        if generated_content and '&lt;' in generated_content:
+            generated_content = html.unescape(generated_content)
+        
         # 미리보기
         with st.expander("생성된 컨텐츠 미리보기"):
-            st.markdown(generated_content, unsafe_allow_html=True)
+            # HTML 컨텐츠를 위한 전체 스타일과 함께 렌더링
+            full_html = f"""
+            <!DOCTYPE html>
+            <html lang="ko">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{
+                        font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+                        line-height: 1.6;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #ffffff;
+                    }}
+                    .module {{
+                        background: white;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                        border-radius: 8px;
+                    }}
+                    .content {{
+                        margin: 20px 0;
+                    }}
+                    .interactive {{
+                        background: #e3f2fd;
+                        padding: 20px;
+                        margin: 20px 0;
+                        border-radius: 8px;
+                        border-left: 4px solid #2196f3;
+                    }}
+                    .quiz {{
+                        background: #fff3e0;
+                        padding: 20px;
+                        margin: 20px 0;
+                        border-radius: 8px;
+                        border-left: 4px solid #ff9800;
+                    }}
+                    h1, h2, h3 {{
+                        color: #333;
+                        margin-top: 1.5em;
+                        margin-bottom: 0.5em;
+                    }}
+                    h1 {{ font-size: 1.8em; }}
+                    h2 {{ font-size: 1.5em; }}
+                    h3 {{ font-size: 1.2em; }}
+                    p {{ margin: 1em 0; }}
+                    ul, ol {{ margin: 1em 0; padding-left: 2em; }}
+                    li {{ margin: 0.3em 0; }}
+                    .image-container {{
+                        margin: 20px 0;
+                        text-align: center;
+                    }}
+                    .image-container img {{
+                        max-width: 100%;
+                        height: auto;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    }}
+                    .image-caption {{
+                        margin-top: 10px;
+                        color: #666;
+                        font-size: 0.9em;
+                    }}
+                    .image-caption a {{
+                        color: #2196f3;
+                        text-decoration: none;
+                    }}
+                    .image-caption a:hover {{
+                        text-decoration: underline;
+                    }}
+                    .image-placeholder {{
+                        background: #f0f0f0;
+                        padding: 40px;
+                        text-align: center;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        color: #666;
+                        font-style: italic;
+                    }}
+                </style>
+            </head>
+            <body>
+                {generated_content}
+            </body>
+            </html>
+            """
+            
+            # HTML 컴포넌트로 렌더링
+            components.html(full_html, height=800, scrolling=True)
         
         # 다운로드 버튼
         export_format = SessionManager.get_session_value("export_format")

@@ -21,10 +21,13 @@ class ExportService:
         if not markdown_text:
             return ""
         
-        # markdown2 extras 설정
+        # 한국어 교육 컨텐츠에서 잘못 코드로 인식되는 패턴들 사전 처리
+        # 영어 교과서 제목 등이 code 태그로 감싸지는 것을 방지
+        processed_text = markdown_text
+        
+        # markdown2 extras 설정 (코드 블록 인식을 제한적으로)
         extras = [
             'tables',  # 테이블 지원
-            'fenced-code-blocks',  # 코드 블록 지원
             'cuddled-lists',  # 리스트 처리 개선
             'break-on-newline',  # 줄바꿈 처리
             'header-ids',  # 헤더에 ID 자동 생성
@@ -32,7 +35,7 @@ class ExportService:
         ]
         
         # 마크다운을 HTML로 변환
-        html_content = markdown2.markdown(markdown_text, extras=extras)
+        html_content = markdown2.markdown(processed_text, extras=extras)
         
         # 추가 스타일링을 위한 CSS 클래스 적용
         # 헤딩 스타일
@@ -44,12 +47,14 @@ class ExportService:
         html_content = html_content.replace('<ul>', '<ul class="md-list">')
         html_content = html_content.replace('<ol>', '<ol class="md-list-ordered">')
         
-        # 코드 블록 스타일
-        html_content = html_content.replace('<pre>', '<pre class="md-code-block">')
-        html_content = html_content.replace('<code>', '<code class="md-code">')
-        
         # 테이블 스타일
         html_content = html_content.replace('<table>', '<table class="md-table">')
+        
+        # 불필요한 code 태그 제거 (교육 컨텐츠 제목이 code로 감싸지는 것 방지)
+        # 단일 라인에서 code 태그가 전체를 감싸는 경우 제거
+        import re
+        html_content = re.sub(r'<p><code>([^<]+)</code></p>', r'<p>\1</p>', html_content)
+        html_content = re.sub(r'<code>([가-힣\s\w\-\(\)]+)</code>', r'\1', html_content)
         
         return html_content
     
@@ -156,6 +161,13 @@ class ExportService:
                     padding: 1em;
                     overflow-x: auto;
                     margin: 1em 0;
+                }}
+                code {{
+                    background: transparent;
+                    padding: 0;
+                    border-radius: 0;
+                    font-family: inherit;
+                    font-size: inherit;
                 }}
                 .md-code {{
                     background: #f0f0f0;
