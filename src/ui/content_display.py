@@ -93,15 +93,8 @@ class ContentDisplayUI:
                     quiz_data = []
                     if generated_content.quiz_content:
                         if isinstance(generated_content.quiz_content, str):
-                            # 문자열인 경우 간단한 파싱
-                            quiz_lines = generated_content.quiz_content.split('\n')
-                            for line in quiz_lines:
-                                if line.strip() and '?' in line:
-                                    quiz_data.append({
-                                        'question': line.strip(),
-                                        'options': ['A', 'B', 'C', 'D'],
-                                        'correct_answer': 'A'
-                                    })
+                            # 구조화된 퀴즈 파싱
+                            quiz_data = ContentDisplayUI._parse_quiz_content(generated_content.quiz_content)
                         elif isinstance(generated_content.quiz_content, list):
                             quiz_data = generated_content.quiz_content
                     
@@ -557,4 +550,78 @@ class ContentDisplayUI:
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"PDF 생성 중 오류가 발생했습니다: {str(e)}") 
+                st.error(f"PDF 생성 중 오류가 발생했습니다: {str(e)}")
+    
+    @staticmethod
+    def _parse_quiz_content(quiz_content: str) -> list:
+        """구조화된 퀴즈 컨텐츠를 파싱하여 퀴즈 데이터 리스트로 변환"""
+        import re
+        
+        quiz_data = []
+        
+        # Q1:, Q2: 패턴으로 각 문제를 분리
+        quiz_pattern = r'Q\d+:\s*(.*?)(?=Q\d+:|$)'
+        questions = re.findall(quiz_pattern, quiz_content.strip(), re.DOTALL)
+        
+        for question_block in questions:
+            question_block = question_block.strip()
+            if not question_block:
+                continue
+                
+            try:
+                # 문제와 선택지, 정답 분리
+                lines = question_block.split('\n')
+                question_text = ""
+                options = []
+                correct_answer = "A"
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    # 첫 번째 비어있지 않은 줄이 문제
+                    if not question_text and not line.startswith(('A)', 'B)', 'C)', 'D)', '정답:')):
+                        question_text = line
+                    # 선택지 파싱
+                    elif line.startswith('A)'):
+                        options.append(line[2:].strip())
+                    elif line.startswith('B)'):
+                        options.append(line[2:].strip())
+                    elif line.startswith('C)'):
+                        options.append(line[2:].strip())
+                    elif line.startswith('D)'):
+                        options.append(line[2:].strip())
+                    # 정답 파싱
+                    elif line.startswith('정답:'):
+                        answer_match = re.search(r'정답:\s*([ABCD])', line)
+                        if answer_match:
+                            correct_answer = answer_match.group(1)
+                
+                # 유효한 데이터가 있으면 추가
+                if question_text and len(options) == 4:
+                    quiz_data.append({
+                        'question': question_text,
+                        'options': options,
+                        'correct_answer': correct_answer
+                    })
+                    
+            except Exception as e:
+                # 파싱 실패한 경우 기본값으로 추가
+                print(f"퀴즈 파싱 오류: {e}")
+                if question_block:
+                    quiz_data.append({
+                        'question': question_block.split('\n')[0] if '\n' in question_block else question_block,
+                        'options': ['선택지 1', '선택지 2', '선택지 3', '선택지 4'],
+                        'correct_answer': 'A'
+                    })
+        
+        # 최소 1개 문제는 보장
+        if not quiz_data:
+            quiz_data.append({
+                'question': '다음 중 올바른 답을 선택하세요.',
+                'options': ['선택지 1', '선택지 2', '선택지 3', '선택지 4'],
+                'correct_answer': 'A'
+            })
+            
+        return quiz_data 

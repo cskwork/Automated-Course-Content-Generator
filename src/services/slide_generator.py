@@ -232,12 +232,14 @@ class SlideGenerator:
             correct_answer = quiz.get('correct_answer', 'A') if isinstance(quiz, dict) else 'A'
         
         options_html = []
-        for option in options:
-            is_correct = option == correct_answer
+        option_letters = ['A', 'B', 'C', 'D']
+        for i, option in enumerate(options):
+            option_letter = option_letters[i] if i < len(option_letters) else 'A'
+            is_correct = option_letter == correct_answer
             options_html.append(f'''
                 <li onclick="selectQuizOption(this, {str(is_correct).lower()})" 
                     data-correct="{str(is_correct).lower()}">
-                    {option}
+                    {option_letter}) {option}
                 </li>
             ''')
         
@@ -336,6 +338,9 @@ class SlideGenerator:
         content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', content, flags=re.MULTILINE)
         content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', content, flags=re.MULTILINE)
         content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', content, flags=re.MULTILINE)
+        
+        # 볼드 텍스트 변환 (**text** -> <strong>text</strong>)
+        content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
         
         # 이미지 플레이스홀더 처리
         image_pattern = r'\[이미지:\s*(.*?)\]'
