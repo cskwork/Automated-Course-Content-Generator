@@ -34,45 +34,45 @@ def generate_html(content, filename):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>디지털 교과서 컨텐츠</title>
         <style>
-            body {
+            body {{
                 font-family: 'Noto Sans KR', sans-serif;
                 line-height: 1.8;
                 padding: 20px;
                 max-width: 1200px;
                 margin: 0 auto;
                 background-color: #f5f5f5;
-            }
-            .module {
+            }}
+            .module {{
                 background: white;
                 padding: 30px;
                 margin-bottom: 20px;
                 border-radius: 10px;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .interactive {
+            }}
+            .interactive {{
                 background: #e3f2fd;
                 padding: 20px;
                 margin: 20px 0;
                 border-radius: 8px;
                 border-left: 4px solid #2196f3;
-            }
-            .quiz {
+            }}
+            .quiz {{
                 background: #fff3e0;
                 padding: 20px;
                 margin: 20px 0;
                 border-radius: 8px;
                 border-left: 4px solid #ff9800;
-            }
-            h1, h2, h3 {
+            }}
+            h1, h2, h3 {{
                 color: #333;
-            }
-            .image-placeholder {
+            }}
+            .image-placeholder {{
                 background: #f0f0f0;
                 padding: 40px;
                 text-align: center;
                 border-radius: 8px;
                 margin: 20px 0;
-            }
+            }}
         </style>
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
     </head>

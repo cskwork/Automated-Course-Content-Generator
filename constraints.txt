@@ -1,0 +1,4 @@
+# fpdf2와 충돌하는 패키지 제외
+PyPDF2!=*
+pyfpdf!=*
+pypdf!=* 

@@ -1,6 +1,9 @@
+-c constraints.txt
 streamlit~=1.33.0
 python-dotenv~=1.0.1
 openai~=1.23.6
 ollama~=0.2.0
 fpdf2~=2.7.8
 requests~=2.31.0
+# PyFPDF와 충돌 방지를 위해 fpdf2만 사용
+# PyFPDF, pyfpdf는 설치하지 마세요
