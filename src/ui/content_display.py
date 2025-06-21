@@ -66,7 +66,8 @@ class ContentDisplayUI:
             export_format=config["export_format"],
             provider=config["provider"],
             model=config["model"],
-            use_stable_diffusion=config.get("use_stable_diffusion", False)
+            image_generator=config.get("image_generator", "Unsplash"),
+            local_files_only=config.get("local_files_only", False)
         )
         
         # 메시지 기록에 추가
@@ -107,7 +108,7 @@ class ContentDisplayUI:
                         'education_level': course_config.grade,
                         'modules': {course_config.unit_name: generated_content.main_content},
                         'quizzes': {course_config.unit_name: quiz_data},
-                        'use_stable_diffusion': course_config.use_stable_diffusion
+                        'image_generator': course_config.image_generator
                     }
                     
                     slide_html = slide_gen.generate_slides_html(course_data)
@@ -138,7 +139,8 @@ class ContentDisplayUI:
                     SessionManager.save_content_to_storage(full_html, False)
                 
                 SessionManager.set_session_value("content_generated", True)
-                SessionManager.set_session_value("use_stable_diffusion", config.get("use_stable_diffusion", False))
+                SessionManager.set_session_value("image_generator", config.get("image_generator", "Unsplash"))
+                SessionManager.set_session_value("local_files_only", config.get("local_files_only", False))
                 SessionManager.save_chat_history(messages)
                 
                 # 새 생성 플래그 초기화
@@ -154,16 +156,17 @@ class ContentDisplayUI:
     @staticmethod
     def _format_full_content(config: Dict[str, Any], generated: GeneratedContent, subject: str) -> str:
         """생성된 컨텐츠를 전체 HTML로 포맷팅"""
-        use_stable_diffusion = config.get("use_stable_diffusion", False)
+        image_generator = config.get("image_generator", "Unsplash")
+        local_files_only = config.get("local_files_only", False)
         # 이미지 플레이스홀더 교체
         main_content_with_images = image_service.enhance_content_with_images(
-            generated.main_content, subject, use_stable_diffusion
+            generated.main_content, subject, image_generator, local_files_only
         )
         
         interactive_content_with_images = ""
         if generated.interactive_content:
             interactive_content_with_images = image_service.enhance_content_with_images(
-                generated.interactive_content, subject, use_stable_diffusion
+                generated.interactive_content, subject, image_generator, local_files_only
             )
         
         # HTML 포맷팅
@@ -424,7 +427,8 @@ class ContentDisplayUI:
             'title': SessionManager.get_session_value("unit_name", "디지털 교과서"),
             'subject': SessionManager.get_session_value("subject", ""),
             'education_level': SessionManager.get_session_value("grade", ""),
-            'use_stable_diffusion': SessionManager.get_session_value("use_stable_diffusion", False),
+            'image_generator': SessionManager.get_session_value("image_generator", "Unsplash"),
+            'local_files_only': SessionManager.get_session_value("local_files_only", False),
             'modules': {},
             'quizzes': {}
         }

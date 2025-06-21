@@ -22,7 +22,7 @@ class SlideGenerator:
     def __init__(self, ai_client=None):
         self.template_path = Path(__file__).parent.parent / "templates" / "slide_template.html"
         self.ai_client = ai_client
-        self.use_stable_diffusion = False
+        self.image_generator = "Unsplash"
         self.subject = "default"
     
     def generate_slides_html(self, course_data: Dict[str, Any]) -> str:
@@ -36,7 +36,7 @@ class SlideGenerator:
             str: 완성된 HTML 문자열
         """
         # 이미지 생성 옵션 설정
-        self.use_stable_diffusion = course_data.get('use_stable_diffusion', False)
+        self.image_generator = course_data.get('image_generator', 'Unsplash')
         self.subject = course_data.get('subject', 'default')
 
         # 템플릿 로드
@@ -361,7 +361,7 @@ class SlideGenerator:
         return image_service.enhance_content_with_images(
             '\n'.join(processed_paragraphs), 
             self.subject, 
-            self.use_stable_diffusion
+            self.image_generator
         )
     
     def _extract_slides_from_content(self, slides_content: str) -> List[str]:

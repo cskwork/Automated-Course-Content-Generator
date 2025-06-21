@@ -32,7 +32,8 @@ class CourseConfig:
     export_format: str
     provider: str = "openai"
     model: str = "gpt-4"
-    use_stable_diffusion: bool = False
+    image_generator: str = "Unsplash"
+    local_files_only: bool = False
     
     def to_prompt_string(self) -> str:
         """프롬프트용 문자열로 변환"""

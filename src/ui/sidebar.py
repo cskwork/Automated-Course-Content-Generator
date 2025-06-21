@@ -164,25 +164,23 @@ class SidebarUI:
         )
         
         # 이미지 생성 설정
-        use_stable_diffusion_toggle = st.toggle(
-            "Stable Diffusion 이미지 사용",
-            value=settings.USE_STABLE_DIFFUSION,
-            help="활성화하면 Stable Diffusion을 사용하여 이미지를 생성합니다. .env 파일의 기본값을 따릅니다.",
-            key="sd_toggle"
+        image_generator_options = ["Unsplash", "Stable Diffusion", "Kandinsky"]
+        image_generator = st.selectbox(
+            "이미지 생성기 선택",
+            image_generator_options,
+            index=1 if settings.USE_STABLE_DIFFUSION else 0, # 기본값 설정
+            help="컨텐츠에 포함될 이미지 생성 방법을 선택하세요."
         )
-        
-        use_stable_diffusion = use_stable_diffusion_toggle
-        
-        # GPU가 없고 Stable Diffusion이 활성화된 경우 CPU 사용 여부 확인
-        if use_stable_diffusion_toggle and not torch.cuda.is_available():
-            st.warning("GPU가 감지되지 않았습니다. CPU 사용은 매우 느릴 수 있습니다.")
-            use_cpu = st.checkbox(
-                "CPU로 이미지 생성하기", 
-                value=False,
-                key="use_cpu_for_sd"
-            )
-            if not use_cpu:
-                use_stable_diffusion = False
+
+        local_files_only = st.toggle(
+            "로컬 캐시 모델만 사용",
+            value=False,
+            help="활성화하면 모델을 새로 다운로드하지 않고 로컬 캐시 파일만 사용합니다. 모델이 미리 다운로드된 경우 유용합니다."
+        )
+
+        # GPU가 없고 AI 생성기가 선택된 경우 경고
+        if image_generator in ["Stable Diffusion", "Kandinsky"] and not torch.cuda.is_available():
+            st.warning("GPU가 감지되지 않았습니다. CPU를 사용한 이미지 생성은 매우 느릴 수 있습니다.")
         
         # 내보내기 형식 선택
         export_format = st.radio(
@@ -197,7 +195,8 @@ class SidebarUI:
             "unit_name": unit_name,
             "learning_objectives": learning_objectives,
             "content_types": content_types,
-            "use_stable_diffusion": use_stable_diffusion,
+            "image_generator": image_generator,
+            "local_files_only": local_files_only,
             "export_format": export_format
         }
     

@@ -11,6 +11,8 @@ from PIL import Image
 import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 import logging
+from urllib3.exceptions import MaxRetryError, NameResolutionError
+from requests.exceptions import ConnectionError
 
 from src.models.content_types import ImageInfo
 
@@ -18,9 +20,12 @@ from src.models.content_types import ImageInfo
 class StableDiffusionGenerator:
     """로컬 Stable Diffusion을 사용한 이미지 생성기"""
     
-    def __init__(self, model_id: str = "runwayml/stable-diffusion-v1-5"):
+    def __init__(self, model_id: str = "dreamlike-art/dreamlike-cartoon"):
         self.model_id = model_id
         self.pipeline = None
+        self.local_files_only = False
+        # 폴백 모델 (기존 일반 SD v1-5)
+        self.fallback_model_id = "runwayml/stable-diffusion-v1-5"
         # 플랫폼별 최적 디바이스 선택
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -44,8 +49,9 @@ class StableDiffusionGenerator:
         # 네거티브 프롬프트 (원하지 않는 요소들)
         self.negative_prompt = "blurry, low quality, distorted, nsfw, inappropriate, text, watermark, signature, dark, scary"
         
-    def _load_pipeline(self) -> bool:
+    def _load_pipeline(self, local_files_only: bool = False) -> bool:
         """Stable Diffusion 파이프라인 로드"""
+        self.local_files_only = local_files_only
         try:
             if self.pipeline is None:
                 st.info("Stable Diffusion 모델을 로딩중입니다... (최초 실행시 시간이 걸릴 수 있습니다)")
@@ -58,13 +64,34 @@ class StableDiffusionGenerator:
                 else:
                     torch_dtype = torch.float32
                 
-                # 파이프라인 생성
-                self.pipeline = StableDiffusionPipeline.from_pretrained(
-                    self.model_id,
-                    torch_dtype=torch_dtype,
-                    safety_checker=None,  # 교육용 컨텐츠에 적합하도록 안전 체크 비활성화
-                    requires_safety_checker=False
-                )
+                # 파이프라인 생성 (선호 모델 → 실패 시 폴백 모델)
+                candidate_models = [self.model_id]
+                # 폴백 모델이 선호 모델과 다를 때만 추가
+                if self.fallback_model_id != self.model_id:
+                    candidate_models.append(self.fallback_model_id)
+
+                last_exception = None
+                for cid in candidate_models:
+                    try:
+                        self.logger.info(f"Attempting to load SD model: {cid}")
+                        self.pipeline = StableDiffusionPipeline.from_pretrained(
+                            cid,
+                            torch_dtype=torch_dtype,
+                            safety_checker=None,  # 교육용 컨텐츠에 적합하도록 안전 체크 비활성화
+                            requires_safety_checker=False,
+                            local_files_only=self.local_files_only
+                        )
+                        # 성공했으면 현재 model_id 업데이트
+                        self.model_id = cid
+                        break
+                    except Exception as e:
+                        self.logger.warning(f"Failed to load model {cid}: {e}")
+                        last_exception = e
+                        self.pipeline = None
+
+                # 두 모델 모두 로딩 실패 시 예외 발생
+                if self.pipeline is None:
+                    raise RuntimeError(f"모델 로드 실패: {last_exception}")
                 
                 # 스케줄러 최적화
                 self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -84,14 +111,25 @@ class StableDiffusionGenerator:
                     # Apple Silicon 최적화
                     self.pipeline.enable_attention_slicing()
                 
-                self.logger.info(f"Stable Diffusion 파이프라인 로드 완료 (device: {self.device})")
+                self.logger.info(f"Stable Diffusion 파이프라인 로드 완료 (device: {self.device}, model: {self.model_id})")
                 st.success("Stable Diffusion 모델 로드 완료!")
                 
             return True
             
+        except (ConnectionError, MaxRetryError, NameResolutionError) as e:
+            self.logger.error(f"네트워크 오류로 모델 로드 실패: {str(e)}")
+            st.error(
+                "모델 다운로드 중 네트워크 오류가 발생했습니다. "
+                "인터넷 연결을 확인하시거나, 잠시 후 다시 시도해주세요. "
+                "방화벽이나 프록시 설정이 원인일 수도 있습니다."
+            )
+            st.info(f"자세한 오류: {e}")
+            self.pipeline = None
+            return False
         except Exception as e:
             self.logger.error(f"파이프라인 로드 실패: {str(e)}")
             st.error(f"Stable Diffusion 모델 로드 실패: {str(e)}")
+            self.pipeline = None
             return False
     
     def _enhance_prompt(self, topic: str, subject: str = "default") -> str:
@@ -108,10 +146,11 @@ class StableDiffusionGenerator:
         height: int = 512,
         num_inference_steps: int = 20,
         guidance_scale: float = 7.5,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        local_files_only: bool = False
     ) -> Optional[Image.Image]:
         """이미지 생성"""
-        if not self._load_pipeline():
+        if not self._load_pipeline(local_files_only=local_files_only):
             return None
             
         try:
@@ -182,10 +221,10 @@ class StableDiffusionGenerator:
         pattern = r'\[이미지: ([^\]]+)\]'
         return re.findall(pattern, content)
     
-    def get_image_for_topic(self, topic: str, subject: str = "default") -> Optional[ImageInfo]:
+    def get_image_for_topic(self, topic: str, subject: str = "default", local_files_only: bool = False) -> Optional[ImageInfo]:
         """주제에 맞는 교육용 이미지 생성"""
         try:
-            image = self.generate_image(topic, subject)
+            image = self.generate_image(topic, subject, local_files_only=local_files_only)
             if image:
                 return self.generate_image_info(image, topic, topic)
             return None
@@ -218,12 +257,13 @@ class StableDiffusionGenerator:
         self, 
         prompts: List[str], 
         subject: str = "default",
+        local_files_only: bool = False,
         **kwargs
     ) -> List[Optional[Image.Image]]:
         """여러 이미지 일괄 생성"""
         images = []
         for prompt in prompts:
-            image = self.generate_image(prompt, subject, **kwargs)
+            image = self.generate_image(prompt, subject, local_files_only=local_files_only, **kwargs)
             images.append(image)
         return images
     
