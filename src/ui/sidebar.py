@@ -3,6 +3,7 @@
 """
 import streamlit as st
 from typing import Dict, Any
+import torch
 
 from src.config.settings import settings
 from src.utils.session_manager import SessionManager
@@ -162,6 +163,27 @@ class SidebarUI:
             default=settings.DEFAULT_CONTENT_TYPES
         )
         
+        # 이미지 생성 설정
+        use_stable_diffusion_toggle = st.toggle(
+            "Stable Diffusion 이미지 사용",
+            value=settings.USE_STABLE_DIFFUSION,
+            help="활성화하면 Stable Diffusion을 사용하여 이미지를 생성합니다. .env 파일의 기본값을 따릅니다.",
+            key="sd_toggle"
+        )
+        
+        use_stable_diffusion = use_stable_diffusion_toggle
+        
+        # GPU가 없고 Stable Diffusion이 활성화된 경우 CPU 사용 여부 확인
+        if use_stable_diffusion_toggle and not torch.cuda.is_available():
+            st.warning("GPU가 감지되지 않았습니다. CPU 사용은 매우 느릴 수 있습니다.")
+            use_cpu = st.checkbox(
+                "CPU로 이미지 생성하기", 
+                value=False,
+                key="use_cpu_for_sd"
+            )
+            if not use_cpu:
+                use_stable_diffusion = False
+        
         # 내보내기 형식 선택
         export_format = st.radio(
             "내보내기 형식",
@@ -175,6 +197,7 @@ class SidebarUI:
             "unit_name": unit_name,
             "learning_objectives": learning_objectives,
             "content_types": content_types,
+            "use_stable_diffusion": use_stable_diffusion,
             "export_format": export_format
         }
     

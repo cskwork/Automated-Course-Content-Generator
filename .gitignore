@@ -9,9 +9,15 @@ output/
 # C extensions
 *.so
 /output
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
 # Distribution / packaging
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -80,7 +86,6 @@ target/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-
 # Mac OS-specific storage files
 .DS_Store
 
@@ -98,3 +103,9 @@ target/
 # Backup files
 backup/
 app_legacy.py
+
+# Logs directory
+logs/
+
+# Debug files
+debug_*.py

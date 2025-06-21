@@ -1,11 +1,16 @@
 """
 PowerPoint 생성 서비스
 python-pptx를 사용하여 PPT 파일을 생성합니다.
+Stable Diffusion 생성 이미지 지원 포함
 """
 import re
 import tempfile
+import base64
+import requests
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from PIL import Image
 
 try:
     from pptx import Presentation
@@ -15,6 +20,8 @@ try:
     PPTX_AVAILABLE = True
 except ImportError:
     PPTX_AVAILABLE = False
+
+from src.services.image_service import image_service
 
 
 class PPTGenerator:
@@ -54,8 +61,10 @@ class PPTGenerator:
             
             # 모듈 슬라이드들
             modules = course_data.get('modules', {})
+            subject = course_data.get('subject', 'default')  # 코스 데이터에서 subject 추출
+            use_stable_diffusion = course_data.get('use_stable_diffusion', False)
             for module_name, module_content in modules.items():
-                self._create_module_slides(module_name, module_content)
+                self._create_module_slides(module_name, module_content, subject, use_stable_diffusion)
             
             # 퀴즈 슬라이드들
             quizzes = course_data.get('quizzes', {})
@@ -118,7 +127,7 @@ class PPTGenerator:
             p.level = 0
             self._set_paragraph_style(p, size=20, color=RGBColor(45, 55, 72))
     
-    def _create_module_slides(self, module_name: str, module_content: str):
+    def _create_module_slides(self, module_name: str, module_content: str, subject: str = "default", use_stable_diffusion: bool = False):
         """모듈 슬라이드들 생성"""
         # 모듈 소개 슬라이드
         slide_layout = self.prs.slide_layouts[5]  # 빈 슬라이드
@@ -134,32 +143,76 @@ class PPTGenerator:
         content_sections = self._split_content_for_ppt_slides(module_content)
         
         for i, section in enumerate(content_sections):
-            self._create_content_slide(f"{module_name} (Part {i + 1})", section)
+            self._create_content_slide(f"{module_name} (Part {i + 1})", section, subject, use_stable_diffusion)
     
-    def _create_content_slide(self, title: str, content: str):
-        """내용 슬라이드 생성"""
-        slide_layout = self.prs.slide_layouts[1]  # 제목 및 내용 레이아웃
-        slide = self.prs.slides.add_slide(slide_layout)
+    def _create_content_slide(self, title: str, content: str, subject: str = "default", use_stable_diffusion: bool = False):
+        """내용 슬라이드 생성 - 이미지 지원"""
+        # 이미지 플레이스홀더 확인
+        image_placeholders = self._extract_images_from_content(content)
         
-        # 제목
-        slide.shapes.title.text = title
-        self._set_font_style(slide.shapes.title.text_frame, size=32, bold=True, color=RGBColor(102, 126, 234))
+        if image_placeholders:
+            # 이미지가 있는 경우: 빈 슬라이드 레이아웃 사용
+            slide_layout = self.prs.slide_layouts[5]
+            slide = self.prs.slides.add_slide(slide_layout)
+            
+            # 제목 추가
+            title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(12.33), Inches(1))
+            title_frame = title_box.text_frame
+            title_frame.text = title
+            self._set_font_style(title_frame, size=32, bold=True, color=RGBColor(102, 126, 234))
+            
+            # 텍스트 영역 크기 조정 (이미지 공간 확보)
+            text_width = Inches(7)
+            text_height = Inches(5.5)
+            text_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.8), text_width, text_height)
+            text_frame = text_box.text_frame
+            text_frame.word_wrap = True
+            
+            # 이미지 추가
+            for i, placeholder in enumerate(image_placeholders[:2]):  # 최대 2개 이미지
+                image_info = image_service.get_image_for_topic(placeholder, subject, use_stable_diffusion)
+                
+                if image_info and image_info.url:
+                    if i == 0:
+                        # 첫 번째 이미지: 오른쪽 상단
+                        position = (Inches(8), Inches(1.8), Inches(4.5), Inches(2.5))
+                    else:
+                        # 두 번째 이미지: 오른쪽 하단
+                        position = (Inches(8), Inches(4.5), Inches(4.5), Inches(2.5))
+                    
+                    self._add_image_to_slide(slide, image_info.url, position)
+        else:
+            # 이미지가 없는 경우: 기본 레이아웃 사용
+            slide_layout = self.prs.slide_layouts[1]  # 제목 및 내용 레이아웃
+            slide = self.prs.slides.add_slide(slide_layout)
+            
+            # 제목
+            slide.shapes.title.text = title
+            self._set_font_style(slide.shapes.title.text_frame, size=32, bold=True, color=RGBColor(102, 126, 234))
+            
+            # 내용
+            content_placeholder = slide.placeholders[1]
+            text_frame = content_placeholder.text_frame
+            text_frame.clear()
         
-        # 내용
-        content_placeholder = slide.placeholders[1]
-        text_frame = content_placeholder.text_frame
-        text_frame.clear()
-        
-        # HTML 태그 제거 및 텍스트 정리
-        clean_content = self._clean_content_for_ppt(content)
-        
-        # 문단별로 분할하여 추가
+        # 텍스트 내용 정리 및 추가
+        # 이미지 플레이스홀더를 제거한 후 텍스트 추가
+        content_without_images = re.sub(r'\[이미지:\s*.*?\]', '', content)
+        clean_content = self._clean_content_for_ppt(content_without_images)
         paragraphs = clean_content.split('\n\n')
-        for i, para in enumerate(paragraphs[:10]):  # 최대 10개 문단
+        
+        # 첫 문단 추가
+        if paragraphs and paragraphs[0].strip():
+            p = text_frame.paragraphs[0]
+            p.text = paragraphs[0].strip()
+            self._set_paragraph_style(p, size=14 if image_placeholders else 16, color=RGBColor(74, 85, 104))
+
+        # 나머지 문단 추가
+        for para in paragraphs[1:8]:  # 최대 8개 문단
             if para.strip():
-                p = text_frame.paragraphs[0] if i == 0 else text_frame.add_paragraph()
+                p = text_frame.add_paragraph()
                 p.text = para.strip()
-                self._set_paragraph_style(p, size=16, color=RGBColor(74, 85, 104))
+                self._set_paragraph_style(p, size=14 if image_placeholders else 16, color=RGBColor(74, 85, 104))
     
     def _create_quiz_slides(self, module_name: str, quiz_list: List[Dict]):
         """퀴즈 슬라이드들 생성"""
@@ -286,9 +339,6 @@ class PPTGenerator:
         # HTML 태그 제거
         content = re.sub(r'<[^>]+>', '', content)
         
-        # 이미지 플레이스홀더 제거
-        content = re.sub(r'\[이미지:\s*.*?\]', '', content)
-        
         # 여러 공백을 하나로
         content = re.sub(r'\s+', ' ', content)
         
@@ -296,6 +346,45 @@ class PPTGenerator:
         content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
         
         return content.strip()
+    
+    def _extract_images_from_content(self, content: str) -> List[str]:
+        """컨텐츠에서 이미지 플레이스홀더 추출"""
+        pattern = r'\[이미지:\s*([^\]]+)\]'
+        return re.findall(pattern, content)
+    
+    def _add_image_to_slide(self, slide, image_url: str, position: tuple = None):
+        """슬라이드에 이미지 추가 (Base64 또는 URL)"""
+        try:
+            image_bytes = None
+            if image_url.startswith('data:image'):
+                # Base64 데이터 처리
+                header, encoded = image_url.split(',', 1)
+                image_bytes = base64.b64decode(encoded)
+            elif image_url.startswith(('http://', 'https://')):
+                # URL에서 이미지 다운로드
+                response = requests.get(image_url, stream=True)
+                response.raise_for_status()
+                image_bytes = response.content
+            
+            if image_bytes:
+                image_stream = BytesIO(image_bytes)
+                
+                if position:
+                    left, top, width, height = position
+                else:
+                    # 기본 위치 (오른쪽 하단)
+                    left = Inches(8)
+                    top = Inches(4)
+                    width = Inches(4)
+                    height = Inches(3)
+                
+                slide.shapes.add_picture(image_stream, left, top, width, height)
+                return True
+                
+        except Exception as e:
+            print(f"이미지 추가 실패: {str(e)}")
+            
+        return False
     
     def _set_font_style(self, text_frame, size: int = 18, bold: bool = False, color: RGBColor = None):
         """텍스트 프레임의 폰트 스타일 설정"""

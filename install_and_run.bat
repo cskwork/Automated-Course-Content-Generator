@@ -1,57 +1,66 @@
 @echo off
-REM Windows 설치 및 실행 스크립트
+setlocal
+
 echo ========================================
 echo  Automated Course Content Generator
-echo  Windows 설치 및 실행 스크립트
+echo  Robust Installation and Run Script
 echo ========================================
 
-REM Python 설치 확인
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python이 설치되지 않았습니다.
-    echo Python 3.12 이상을 설치해주세요: https://www.python.org/downloads/
-    pause
-    exit /b 1
-)
-
-echo [INFO] Python 버전 확인 중...
-python --version
-
-REM 가상환경 생성 및 활성화
-echo [INFO] 가상환경 생성 중...
+REM Activate venv or create if it doesn't exist
 if not exist "venv" (
+    echo [INFO] Creating virtual environment...
     python -m venv venv
-    echo [SUCCESS] 가상환경이 성공적으로 생성되었습니다.
-) else (
-    echo [INFO] 가상환경이 이미 존재합니다.
 )
-
-echo [INFO] 가상환경 활성화 중...
 call venv\Scripts\activate.bat
 
-REM 의존성 설치
-echo [INFO] 의존성 패키지 설치 중...
-pip install --upgrade pip
-pip install -r requirements.txt
+echo [INFO] Upgrading pip...
+python -m pip install --upgrade pip
 
-REM .env 파일 확인
-if not exist ".env" (
-    if exist ".env.example" (
-        echo [WARNING] .env 파일이 없습니다. .env.example을 참고하여 .env 파일을 생성해주세요.
-    ) else (
-        echo [WARNING] .env 파일이 없습니다. OpenAI API 키 등 환경 변수를 설정해주세요.
-    )
-    echo [INFO] .env 파일 생성 후 다시 실행해주세요.
+echo [INFO] Installing all dependencies from requirements_windows.txt...
+pip install -r requirements_windows.txt
+if errorlevel 1 (
+    echo [ERROR] Failed to install dependencies from requirements_windows.txt.
     pause
     exit /b 1
 )
 
-REM Streamlit 애플리케이션 실행
-echo [INFO] Streamlit 애플리케이션을 시작합니다...
-echo [INFO] 브라우저에서 http://localhost:8501 로 접속하세요.
-echo [INFO] 종료하려면 Ctrl+C를 누르세요.
-echo ========================================
+REM Check for NVIDIA GPU to decide on PyTorch version
+nvidia-smi >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] No NVIDIA GPU detected. Installing PyTorch CPU version...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+) else (
+    echo [INFO] NVIDIA GPU detected. Installing PyTorch CUDA version...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+)
+if errorlevel 1 (
+    echo [ERROR] PyTorch installation failed.
+    echo Please try running fix_pytorch.bat or check your internet connection.
+    pause
+    exit /b 1
+)
 
-streamlit run app.py
 
+REM Crucial step: Uninstall xformers as it's incompatible with CPU mode and can cause issues.
+echo [INFO] Ensuring xformers is uninstalled...
+pip uninstall -y xformers >nul 2>&1
+
+
+REM Final verification
+echo [INFO] Verifying final installation...
+python -c "import torch; import diffusers; import transformers; print('[SUCCESS] All major libraries are installed.')"
+if errorlevel 1 (
+    echo [ERROR] Verification failed. Some libraries are still missing or broken.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [SUCCESS] Installation and setup complete.
+echo Starting the application...
+echo.
+
+call run_app.bat
+
+endlocal
 pause 

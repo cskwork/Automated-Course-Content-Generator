@@ -18,6 +18,11 @@
 
 ### Windows
 
+**[중요] Windows 필수 설치 항목:**
+
+- **Microsoft Visual C++ Redistributable**: Windows에서 PyTorch를 실행하기 위해 반드시 필요한 시스템 라이브러리입니다.
+  - [여기에서 최신 버전을 다운로드하여 설치하세요.](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
 ```bash
 install_and_run.bat
 ```

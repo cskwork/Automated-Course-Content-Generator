@@ -1,5 +1,5 @@
 """
-Unsplash API 이미지 서비스
+이미지 서비스 - Unsplash API와 Stable Diffusion 지원
 """
 import re
 from typing import List, Optional
@@ -8,10 +8,11 @@ import streamlit as st
 
 from src.config.settings import settings
 from src.models.content_types import ImageInfo
+from ..module.generate_image.stable_diffusion_generator import stable_diffusion_generator
 
 
 class ImageService:
-    """이미지 검색 및 처리 서비스"""
+    """이미지 검색 및 처리 서비스 - Unsplash API와 Stable Diffusion 지원"""
     
     def __init__(self):
         self.api_key = settings.UNSPLASH_API_KEY
@@ -53,33 +54,38 @@ class ImageService:
             st.error(f"Unsplash API 오류: {str(e)}")
             return []
     
-    def get_image_for_topic(self, topic: str, subject: str = "educational") -> Optional[ImageInfo]:
-        """주제에 맞는 교육용 이미지 가져오기"""
-        # 교육용 키워드 추가
-        base_keyword = settings.EDUCATIONAL_KEYWORDS.get(subject, "education learning")
-        search_query = f"{topic} {base_keyword}"
-        
-        # 이미지 검색
-        images = self.search_images(search_query, per_page=1)
-        
-        if images:
-            return images[0]
+    def get_image_for_topic(self, topic: str, subject: str = "educational", use_stable_diffusion: bool = False) -> Optional[ImageInfo]:
+        """주제에 맞는 교육용 이미지 가져오기 - Unsplash 또는 Stable Diffusion 사용"""
+        if use_stable_diffusion:
+            # Stable Diffusion을 사용한 이미지 생성
+            return stable_diffusion_generator.get_image_for_topic(topic, subject)
         else:
-            # 대체 검색어로 재시도
-            images = self.search_images(base_keyword, per_page=1)
-            return images[0] if images else None
+            # 기존 Unsplash API 사용
+            # 교육용 키워드 추가
+            base_keyword = settings.EDUCATIONAL_KEYWORDS.get(subject, "education learning")
+            search_query = f"{topic} {base_keyword}"
+            
+            # 이미지 검색
+            images = self.search_images(search_query, per_page=1)
+            
+            if images:
+                return images[0]
+            else:
+                # 대체 검색어로 재시도
+                images = self.search_images(base_keyword, per_page=1)
+                return images[0] if images else None
     
     def extract_placeholders(self, content: str) -> List[str]:
         """컨텐츠에서 이미지 플레이스홀더 추출"""
         pattern = r'\[이미지: ([^\]]+)\]'
         return re.findall(pattern, content)
     
-    def replace_placeholders(self, content: str, subject: str) -> str:
+    def replace_placeholders(self, content: str, subject: str, use_stable_diffusion: bool = False) -> str:
         """이미지 플레이스홀더를 실제 이미지로 교체"""
         placeholders = self.extract_placeholders(content)
         
         for placeholder in placeholders:
-            image_info = self.get_image_for_topic(placeholder, subject)
+            image_info = self.get_image_for_topic(placeholder, subject, use_stable_diffusion)
             
             if image_info:
                 image_html = image_info.to_html(placeholder)
@@ -91,13 +97,16 @@ class ImageService:
         
         return content
     
-    def enhance_content_with_images(self, content: str, subject: str) -> str:
-        """컨텐츠에 이미지 추가"""
-        if not self.api_key:
-            return content
-        
-        with st.spinner("관련 이미지를 검색중입니다... 🖼️"):
-            return self.replace_placeholders(content, subject)
+    def enhance_content_with_images(self, content: str, subject: str, use_stable_diffusion: bool = False) -> str:
+        """컨텐츠에 이미지 추가 - Unsplash 또는 Stable Diffusion 사용"""
+        if use_stable_diffusion:
+            return stable_diffusion_generator.enhance_content_with_images(content, subject)
+        else:
+            if not self.api_key:
+                return content
+            
+            with st.spinner("관련 이미지를 검색중입니다... 🖼️"):
+                return self.replace_placeholders(content, subject, use_stable_diffusion=False)
 
 
 # 싱글톤 인스턴스

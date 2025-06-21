@@ -14,6 +14,7 @@ from src.services.slide_generator import slide_generator
 from src.services.ppt_generator import ppt_generator
 from src.utils.session_manager import SessionManager
 from src.utils.validators import Validators
+from src.config.settings import settings
 
 
 class ContentDisplayUI:
@@ -64,7 +65,8 @@ class ContentDisplayUI:
             content_types=config["content_types"],
             export_format=config["export_format"],
             provider=config["provider"],
-            model=config["model"]
+            model=config["model"],
+            use_stable_diffusion=config.get("use_stable_diffusion", False)
         )
         
         # 메시지 기록에 추가
@@ -104,7 +106,8 @@ class ContentDisplayUI:
                         'subject': course_config.subject,
                         'education_level': course_config.grade,
                         'modules': {course_config.unit_name: generated_content.main_content},
-                        'quizzes': {course_config.unit_name: quiz_data}
+                        'quizzes': {course_config.unit_name: quiz_data},
+                        'use_stable_diffusion': course_config.use_stable_diffusion
                     }
                     
                     slide_html = slide_gen.generate_slides_html(course_data)
@@ -135,6 +138,7 @@ class ContentDisplayUI:
                     SessionManager.save_content_to_storage(full_html, False)
                 
                 SessionManager.set_session_value("content_generated", True)
+                SessionManager.set_session_value("use_stable_diffusion", config.get("use_stable_diffusion", False))
                 SessionManager.save_chat_history(messages)
                 
                 # 새 생성 플래그 초기화
@@ -150,15 +154,16 @@ class ContentDisplayUI:
     @staticmethod
     def _format_full_content(config: Dict[str, Any], generated: GeneratedContent, subject: str) -> str:
         """생성된 컨텐츠를 전체 HTML로 포맷팅"""
+        use_stable_diffusion = config.get("use_stable_diffusion", False)
         # 이미지 플레이스홀더 교체
         main_content_with_images = image_service.enhance_content_with_images(
-            generated.main_content, subject
+            generated.main_content, subject, use_stable_diffusion
         )
         
         interactive_content_with_images = ""
         if generated.interactive_content:
             interactive_content_with_images = image_service.enhance_content_with_images(
-                generated.interactive_content, subject
+                generated.interactive_content, subject, use_stable_diffusion
             )
         
         # HTML 포맷팅
@@ -419,6 +424,7 @@ class ContentDisplayUI:
             'title': SessionManager.get_session_value("unit_name", "디지털 교과서"),
             'subject': SessionManager.get_session_value("subject", ""),
             'education_level': SessionManager.get_session_value("grade", ""),
+            'use_stable_diffusion': SessionManager.get_session_value("use_stable_diffusion", False),
             'modules': {},
             'quizzes': {}
         }

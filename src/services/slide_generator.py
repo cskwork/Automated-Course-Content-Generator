@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from prompts.slide_prompt import get_slide_optimization_prompt
+from src.services.image_service import image_service
 
 
 class SlideGenerator:
@@ -21,6 +22,8 @@ class SlideGenerator:
     def __init__(self, ai_client=None):
         self.template_path = Path(__file__).parent.parent / "templates" / "slide_template.html"
         self.ai_client = ai_client
+        self.use_stable_diffusion = False
+        self.subject = "default"
     
     def generate_slides_html(self, course_data: Dict[str, Any]) -> str:
         """
@@ -32,6 +35,10 @@ class SlideGenerator:
         Returns:
             str: 완성된 HTML 문자열
         """
+        # 이미지 생성 옵션 설정
+        self.use_stable_diffusion = course_data.get('use_stable_diffusion', False)
+        self.subject = course_data.get('subject', 'default')
+
         # 템플릿 로드
         with open(self.template_path, 'r', encoding='utf-8') as f:
             template = f.read()
@@ -334,28 +341,8 @@ class SlideGenerator:
     
     def _process_content_for_slide(self, content: str) -> str:
         """슬라이드용 컨텐츠를 HTML로 변환합니다."""
-        # 마크다운 스타일 변환
-        content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', content, flags=re.MULTILINE)
-        content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', content, flags=re.MULTILINE)
-        content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', content, flags=re.MULTILINE)
-        
         # 볼드 텍스트 변환 (**text** -> <strong>text</strong>)
         content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
-        
-        # 이미지 플레이스홀더 처리
-        image_pattern = r'\[이미지:\s*(.*?)\]'
-        def replace_image(match):
-            description = match.group(1)
-            return f'''
-            <div class="image-container">
-                <div style="background: #f7fafc; border: 2px dashed #cbd5e0; border-radius: 15px; padding: 60px 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">🖼️</div>
-                    <p style="color: #718096; font-size: 1.1rem;">{description}</p>
-                </div>
-            </div>
-            '''
-        
-        content = re.sub(image_pattern, replace_image, content)
         
         # 리스트 처리
         content = re.sub(r'^\- (.*?)$', r'<li>\1</li>', content, flags=re.MULTILINE)
@@ -371,7 +358,11 @@ class SlideGenerator:
                 paragraph = f'<p>{paragraph}</p>'
             processed_paragraphs.append(paragraph)
         
-        return '\n'.join(processed_paragraphs)
+        return image_service.enhance_content_with_images(
+            '\n'.join(processed_paragraphs), 
+            self.subject, 
+            self.use_stable_diffusion
+        )
     
     def _extract_slides_from_content(self, slides_content: str) -> List[str]:
         """슬라이드 컨텐츠에서 개별 슬라이드들을 추출합니다."""

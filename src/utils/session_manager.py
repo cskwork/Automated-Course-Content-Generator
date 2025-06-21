@@ -4,6 +4,7 @@
 import shelve
 import streamlit as st
 import json
+import os
 from typing import Any, Dict, List
 
 from src.config.settings import settings
@@ -11,6 +12,13 @@ from src.config.settings import settings
 
 class SessionManager:
     """Streamlit 세션 상태 관리"""
+    
+    @staticmethod
+    def _ensure_logs_dir() -> None:
+        """로그 디렉토리 생성 확인"""
+        logs_dir = os.path.dirname(settings.CHAT_HISTORY_FILE)
+        if logs_dir and not os.path.exists(logs_dir):
+            os.makedirs(logs_dir, exist_ok=True)
     
     @staticmethod
     def init_session_state() -> None:
@@ -38,12 +46,14 @@ class SessionManager:
     @staticmethod
     def load_chat_history() -> List[Dict[str, str]]:
         """채팅 기록 로드"""
+        SessionManager._ensure_logs_dir()
         with shelve.open(settings.CHAT_HISTORY_FILE) as db:
             return db.get("messages", [])
     
     @staticmethod
     def save_chat_history(messages: List[Dict[str, str]]) -> None:
         """채팅 기록 저장"""
+        SessionManager._ensure_logs_dir()
         with shelve.open(settings.CHAT_HISTORY_FILE) as db:
             db["messages"] = messages
     
@@ -115,6 +125,7 @@ class SessionManager:
         }
         
         # shelve를 사용해서 로컬에 저장
+        SessionManager._ensure_logs_dir()
         with shelve.open(settings.CHAT_HISTORY_FILE) as db:
             db['saved_content'] = content_data
     
@@ -122,6 +133,7 @@ class SessionManager:
     def restore_content_from_storage() -> None:
         """로컬 스토리지에서 컨텐츠 복원"""
         try:
+            SessionManager._ensure_logs_dir()
             with shelve.open(settings.CHAT_HISTORY_FILE) as db:
                 if 'saved_content' in db:
                     content_data = db['saved_content']
@@ -139,6 +151,7 @@ class SessionManager:
     def clear_content_storage() -> None:
         """로컬 스토리지의 컨텐츠 삭제"""
         try:
+            SessionManager._ensure_logs_dir()
             with shelve.open(settings.CHAT_HISTORY_FILE) as db:
                 if 'saved_content' in db:
                     del db['saved_content']

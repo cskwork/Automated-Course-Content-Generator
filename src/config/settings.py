@@ -51,6 +51,11 @@ class Settings:
     def UNSPLASH_API_KEY(self):
         return os.getenv("UNSPLASH_API_KEY")
     
+    @property
+    def USE_STABLE_DIFFUSION(self) -> bool:
+        """Stable Diffusion 사용 여부"""
+        return os.getenv("USE_STABLE_DIFFUSION", "False").lower() in ("true", "1", "t")
+    
     # 모델 옵션
     MODEL_OPTIONS: Dict[str, list] = {
         "openai": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"],
@@ -76,7 +81,7 @@ class Settings:
     EXPORT_FORMATS = ["HTML", "PDF", "PPT", "둘 다"]
     
     # 파일 설정
-    CHAT_HISTORY_FILE = "chat_history"
+    CHAT_HISTORY_FILE = "logs/chat_history"
     OUTPUT_DIR = "output"
     
     # 이미지 검색 설정

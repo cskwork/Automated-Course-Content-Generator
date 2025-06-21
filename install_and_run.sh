@@ -18,6 +18,11 @@ fi
 echo "[INFO] Python 버전 확인 중..."
 python3 --version
 
+# 플랫폼 감지
+PLATFORM=$(uname -s)
+ARCH=$(uname -m)
+echo "[INFO] 플랫폼: $PLATFORM, 아키텍처: $ARCH"
+
 # 가상환경 생성 및 활성화
 echo "[INFO] 가상환경 생성 중..."
 if [ ! -d "venv" ]; then
@@ -34,6 +39,53 @@ source venv/bin/activate
 echo "[INFO] 의존성 패키지 설치 중..."
 pip install --upgrade pip
 pip install -r requirements.txt
+
+# 플랫폼별 PyTorch 설치
+if [[ "$PLATFORM" == "Darwin" ]]; then
+    if [[ "$ARCH" == "arm64" ]]; then
+        # Apple Silicon (M1/M2/M3)
+        echo "[INFO] Apple Silicon용 PyTorch 설치 중..."
+        pip uninstall -y torch torchvision torchaudio
+        pip install torch torchvision torchaudio
+        echo "[SUCCESS] Apple Silicon 최적화 PyTorch가 설치되었습니다."
+    else
+        # Intel Mac
+        echo "[INFO] Intel Mac용 PyTorch 설치 중..."
+        pip uninstall -y torch torchvision torchaudio
+        pip install torch torchvision torchaudio
+        echo "[SUCCESS] Intel Mac용 PyTorch가 설치되었습니다."
+    fi
+elif [[ "$PLATFORM" == "Linux" ]]; then
+    # NVIDIA GPU 확인 (Linux)
+    if command -v nvidia-smi &> /dev/null; then
+        echo "[SUCCESS] NVIDIA GPU가 감지되었습니다. CUDA 버전을 설치합니다."
+        pip uninstall -y torch torchvision torchaudio
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        echo "[SUCCESS] PyTorch CUDA 버전이 설치되었습니다."
+        
+        # xformers 설치 (메모리 최적화)
+        echo "[INFO] xformers 설치 중 (메모리 최적화)..."
+        pip install xformers --index-url https://download.pytorch.org/whl/cu121
+        if [ $? -ne 0 ]; then
+            echo "[WARNING] xformers 설치에 실패했습니다. 계속 진행합니다."
+        else
+            echo "[SUCCESS] xformers가 설치되었습니다."
+        fi
+    else
+        echo "[INFO] NVIDIA GPU가 감지되지 않았습니다. CPU 버전을 사용합니다."
+        pip uninstall -y torch torchvision torchaudio
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        echo "[SUCCESS] PyTorch CPU 버전이 설치되었습니다."
+    fi
+fi
+
+# GPU/MPS 감지 확인
+echo "[INFO] PyTorch 가속 장치 확인 중..."
+if [[ "$PLATFORM" == "Darwin" && "$ARCH" == "arm64" ]]; then
+    python3 -c "import torch; print('MPS available:', torch.backends.mps.is_available()); print('MPS built:', torch.backends.mps.is_built())"
+else
+    python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count() if torch.cuda.is_available() else 0)"
+fi
 
 # .env 파일 확인
 if [ ! -f ".env" ]; then
