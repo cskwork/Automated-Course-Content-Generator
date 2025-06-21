@@ -7,7 +7,7 @@ import json
 import os
 from typing import Any, Dict, List
 
-from src.config.settings import settings
+from src.Config.settings import settings
 
 
 class SessionManager:

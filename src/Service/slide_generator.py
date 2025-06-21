@@ -12,8 +12,8 @@ from pathlib import Path
 # 프롬프트 import
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from prompts.slide_prompt import get_slide_optimization_prompt
-from src.services.image_service import image_service
+from src.Prompts.slide_prompt import get_slide_optimization_prompt
+from src.Service.image_service import image_service
 
 
 class SlideGenerator:

@@ -3,11 +3,11 @@
 """
 import streamlit as st
 
-from src.config.settings import settings
-from src.utils.session_manager import SessionManager
-from src.ui.sidebar import SidebarUI
-from src.ui.content_display import ContentDisplayUI
-from src.services.ai_service import ai_service
+from src.Config.settings import settings
+from src.Utils.session_manager import SessionManager
+from src.UI.sidebar import SidebarUI
+from src.UI.content_display import ContentDisplayUI
+from src.Service.ai_service import ai_service
 
 
 def main():

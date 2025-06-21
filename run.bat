@@ -6,20 +6,21 @@ echo  Automated Course Content Generator
 echo  Robust Installation and Run Script
 echo ========================================
 
-REM Activate venv or create if it doesn't exist
-if not exist "venv" (
-    echo [INFO] Creating virtual environment...
-    python -m venv venv
+REM Check if virtual environment exists, if not use global Python
+if exist "venv\Scripts\activate.bat" (
+    echo [INFO] Activating virtual environment...
+    call venv\Scripts\activate.bat
+) else (
+    echo [INFO] Using global Python environment...
 )
-call venv\Scripts\activate.bat
 
 echo [INFO] Upgrading pip...
 python -m pip install --upgrade pip
 
-echo [INFO] Installing all dependencies from requirements_windows.txt...
-pip install -r requirements_windows.txt
+echo [INFO] Installing all dependencies from requirements.txt...
+pip install -r requirements.txt
 if errorlevel 1 (
-    echo [ERROR] Failed to install dependencies from requirements_windows.txt.
+    echo [ERROR] Failed to install dependencies from requirements.txt.
     pause
     exit /b 1
 )
@@ -60,7 +61,7 @@ echo [SUCCESS] Installation and setup complete.
 echo Starting the application...
 echo.
 
-call run_app.bat
+streamlit run app.py
 
 endlocal
 pause 

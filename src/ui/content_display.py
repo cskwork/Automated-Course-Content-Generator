@@ -6,15 +6,15 @@ import streamlit.components.v1 as components
 import html
 from typing import Dict, Any
 
-from src.models.content_types import CourseConfig, GeneratedContent
-from src.services.ai_service import ai_service
-from src.services.image_service import image_service
-from src.services.export_service import export_service
-from src.services.slide_generator import slide_generator
-from src.services.ppt_generator import ppt_generator
-from src.utils.session_manager import SessionManager
-from src.utils.validators import Validators
-from src.config.settings import settings
+from src.Entity.content_types import CourseConfig, GeneratedContent
+from src.Service.ai_service import ai_service
+from src.Service.image_service import image_service
+from src.Service.export_service import export_service
+from src.Service.slide_generator import slide_generator
+from src.Service.ppt_generator import ppt_generator
+from src.Utils.session_manager import SessionManager
+from src.Utils.validators import Validators
+from src.Config.settings import settings
 
 
 class ContentDisplayUI:
@@ -531,7 +531,7 @@ class ContentDisplayUI:
     @staticmethod
     def _create_basic_download_buttons(content: str, format_type: str) -> None:
         """기본 다운로드 버튼 생성 (컬럼 중첩 방지)"""
-        from src.models.content_types import ExportFormat
+        from src.Entity.content_types import ExportFormat
         
         # HTML 다운로드
         if format_type in [ExportFormat.HTML.value, ExportFormat.BOTH.value]:

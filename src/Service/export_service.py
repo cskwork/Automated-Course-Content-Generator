@@ -8,8 +8,8 @@ from fpdf import FPDF  # type: ignore
 import streamlit as st
 import markdown2
 
-from src.models.content_types import ExportFormat
-from src.config.settings import settings
+from src.Entity.content_types import ExportFormat
+from src.Config.settings import settings
 
 
 class ExportService:

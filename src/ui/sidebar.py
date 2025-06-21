@@ -5,9 +5,9 @@ import streamlit as st
 from typing import Dict, Any
 import torch
 
-from src.config.settings import settings
-from src.utils.session_manager import SessionManager
-from src.services.ai_service import ai_service
+from src.Config.settings import settings
+from src.Utils.session_manager import SessionManager
+from src.Service.ai_service import ai_service
 
 
 class SidebarUI:
