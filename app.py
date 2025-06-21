@@ -7,6 +7,7 @@ import shelve
 import unicodedata
 from fpdf import FPDF # type: ignore
 import base64
+import requests
 # from prompts.coursify_prompt import COURSIFY_PROMPT
 from prompts.tabler_prompt import TABLER_PROMPT
 from prompts.dictator_prompt import DICTATOR_PROMPT
@@ -37,17 +38,45 @@ st.title("Automated Course Content Generator 🤖")
 USER_AVATAR = "👤"
 BOT_AVATAR = "🤖"
 
-try:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise OpenAIError("Please provide OPENAI_API_KEY")
-    client = OpenAI(api_key=api_key)
-except OpenAIError as e:
-    st.error(str(e))
+# Initialize AI client based on provider selection
+def initialize_ai_client():
+    provider = st.session_state.get('ai_provider', 'openai')
+    
+    if provider == 'openai':
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error("Please provide OPENAI_API_KEY in your .env file")
+            return None
+        return OpenAI(api_key=api_key), 'openai'
+    
+    elif provider == 'openrouter':
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        if not api_key:
+            st.error("Please provide OPENROUTER_API_KEY in your .env file")
+            return None
+        # OpenRouter uses OpenAI-compatible API
+        return OpenAI(api_key=api_key, base_url=base_url), 'openrouter'
+    
+    return None, None
 
-# Ensure openai_model is initialized in session state
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"
+try:
+    client, current_provider = initialize_ai_client()
+except Exception as e:
+    st.error(f"Error initializing AI client: {str(e)}")
+    client, current_provider = None, None
+
+# Initialize session state for AI provider and model
+if "ai_provider" not in st.session_state:
+    # 환경 변수에서 모델 선택 설정을 읽어와서 기본값으로 사용
+    default_provider = os.getenv("MODEL_SELECTION", "openai")
+    st.session_state["ai_provider"] = default_provider
+
+if "ai_model" not in st.session_state:
+    if st.session_state["ai_provider"] == "openai":
+        st.session_state["ai_model"] = "gpt-3.5-turbo"
+    else:  # openrouter
+        st.session_state["ai_model"] = "openai/gpt-3.5-turbo"
 
 # Load chat history from shelve file
 def load_chat_history():
@@ -76,6 +105,52 @@ col1, col_divider, col2 = st.columns([3.0,0.1,7.0])
 
 with col1:
     st.header("Course Details 📋")
+    
+    # AI Provider Selection
+    st.subheader("AI Provider Settings")
+    provider_options = ["openai", "openrouter"]
+    selected_provider = st.selectbox(
+        "Choose AI Provider",
+        provider_options,
+        index=provider_options.index(st.session_state.get("ai_provider", "openai")),
+        help="Select your preferred AI provider"
+    )
+    
+    # Update session state if provider changed
+    if selected_provider != st.session_state.get("ai_provider"):
+        st.session_state["ai_provider"] = selected_provider
+        # Reinitialize client when provider changes
+        client, current_provider = initialize_ai_client()
+        # Update default model based on provider
+        if selected_provider == "openai":
+            st.session_state["ai_model"] = "gpt-3.5-turbo"
+        else:  # openrouter
+            st.session_state["ai_model"] = "openai/gpt-3.5-turbo"
+    
+    # Model Selection based on provider
+    if selected_provider == "openai":
+        model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+    else:  # openrouter
+        model_options = [
+            "openai/gpt-3.5-turbo",
+            "openai/gpt-4",
+            "openai/gpt-4-turbo",
+            "anthropic/claude-3-haiku",
+            "anthropic/claude-3-sonnet",
+            "meta-llama/llama-3.1-8b-instruct",
+            "google/gemini-pro"
+        ]
+    
+    selected_model = st.selectbox(
+        "Choose Model",
+        model_options,
+        index=model_options.index(st.session_state.get("ai_model", model_options[0])) if st.session_state.get("ai_model") in model_options else 0,
+        help="Select the AI model to use for content generation"
+    )
+    st.session_state["ai_model"] = selected_model
+    
+    st.divider()
+    
     # Interactive widgets for course details
     course_name = st.text_input("Course Name")
     target_audience_edu_level = st.selectbox(
@@ -126,6 +201,9 @@ with col2:
     st.header("Generated Course Content 📝")
     # Display the generated content here
     if generate_button and "pdf" not in st.session_state:
+        if not client:
+            st.error("Please configure your API key in the .env file for the selected provider.")
+            st.stop()
         # Include user selections in the message history
         user_selections = f"Course Name: {course_name}\nTarget Audience Edu Level: {target_audience_edu_level}\nDifficulty Level: {difficulty_level}\nNo. of Modules: {num_modules}\nCourse Duration: {course_duration}\nCourse Credit: {course_credit}"
         st.session_state.messages.append({"role": "user", "content": user_selections})
@@ -133,7 +211,7 @@ with col2:
         PROMPT=f"You are Prompter, the world's best Prompt Engineer. I am using another GenAI tool, Tabler, that helps in generating a course outline for trainers and professionals for the automated course content generation for their courses. Your job is to strictly use the only following inputs: 1) Course Name: {course_name} 2) Target Audience Edu Level: {target_audience_edu_level} 3) Course Difficulty Level: {difficulty_level} 4) No. of Modules: {num_modules} 5) Course Duration: {course_duration} 6) Course Credit: {course_credit}.  to generate a prompt for Tabler so that it can produce the best possible outputs. The prompt that you generate must be comprehensive and strictly follow the above given inputs and also mention the given inputs in the prompt you generate. Moreover, it is your job to also identify if the course name is appropriate and not gibberish."
 
         response = client.chat.completions.create(
-            model=st.session_state["openai_model"],
+            model=st.session_state["ai_model"],
             messages=[
                 {"role": "system", "content": PROMPT},
             ]
@@ -145,7 +223,7 @@ with col2:
         
         with st.spinner("Generating course outline..."):
             response = client.chat.completions.create(
-                model=st.session_state["openai_model"],
+                model=st.session_state["ai_model"],
                 messages=[
                     {"role": "system", "content": TABLER_PROMPT},
                     {"role": "user", "content": generated_prompt},
@@ -183,7 +261,7 @@ with col2:
             if 'complete_course' in st.session_state and st.session_state['complete_course']:
                 with st.spinner("Generating complete course..."):
                     response = client.chat.completions.create(
-                        model=st.session_state["openai_model"],
+                        model=st.session_state["ai_model"],
                         messages=[
                             {"role": "system", "content": DICTATOR_PROMPT},
                             {"role": "user", "content": st.session_state['course_outline']},
@@ -221,7 +299,7 @@ with col2:
                             """
                             with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
                                 response = client.chat.completions.create(
-                                    model=st.session_state["openai_model"],
+                                    model=st.session_state["ai_model"],
                                     messages=[
                                         {"role": "system", "content": module_lesson_prompt},
                                         # {"role": "user", "content": st.session_state['course_outline']},
@@ -237,7 +315,7 @@ with col2:
                         quizzy_prompt_final = QUIZZY_PROMPT + module_content
                         with st.spinner(f"Generating quiz questions for {module_name}"):
                             res = client.chat.completions.create(
-                                model=st.session_state["openai_model"],
+                                model=st.session_state["ai_model"],
                                 messages=[
                                     {"role": "system", "content": quizzy_prompt_final},
                                     # {"role": "user", "content": st.session_state['course_outline']},
@@ -273,7 +351,7 @@ with col2:
                     {st.session_state['course_outline']}"""
 
                     response = client.chat.completions.create(
-                        model=st.session_state["openai_model"],
+                        model=st.session_state["ai_model"],
                         messages=[
                             {"role": "system", "content": TABLER_PROMPT},
                             {"role": "user", "content": Mod},
@@ -283,7 +361,7 @@ with col2:
 
                     with st.spinner("Generating complete course with the specified modifications..."):
                         response = client.chat.completions.create(
-                            model=st.session_state["openai_model"],
+                            model=st.session_state["ai_model"],
                             messages=[
                                 {"role": "system", "content": DICTATOR_PROMPT},
                                 {"role": "user", "content": Mod_CO},
@@ -321,7 +399,7 @@ with col2:
                                 """
                                 with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
                                     response = client.chat.completions.create(
-                                        model=st.session_state["openai_model"],
+                                        model=st.session_state["ai_model"],
                                         messages=[
                                             {"role": "system", "content": module_lesson_prompt},
                                             # {"role": "user", "content": st.session_state['course_outline']},
@@ -337,7 +415,7 @@ with col2:
                             quizzy_prompt_final = QUIZZY_PROMPT + module_content
                             with st.spinner(f"Generating quiz questions for {module_name}"):
                                 res = client.chat.completions.create(
-                                    model=st.session_state["openai_model"],
+                                    model=st.session_state["ai_model"],
                                     messages=[
                                         {"role": "system", "content": quizzy_prompt_final},
                                         # {"role": "user", "content": st.session_state['course_outline']},
