@@ -100,64 +100,86 @@ class AIService:
         if not self.client:
             raise ValueError("AI 클라이언트가 초기화되지 않았습니다.")
         
-        # 과목별 프롬프트 선택
-        base_prompt = (ELEMENTARY_ENGLISH_PROMPT if config.subject == "영어" 
-                      else ELEMENTARY_MATH_PROMPT)
+        start_time = time.time()
         
-        # 1. 기본 컨텐츠 생성
-        content_prompt = f"""{base_prompt}
+        # 로깅 시작
+        config_info = f"{config.subject} {config.grade} {config.unit_name} (모델: {config.model})"
+        content_logger.log_start(config_info)
         
-        학년: {config.grade}
-        학기: {config.semester}
-        단원명: {config.unit_name}
-        학습 목표: {config.learning_objectives}
-        
-        다음 형식으로 컨텐츠를 생성해주세요:
-        1. 도입부 (학습 동기 유발)
-        2. 핵심 개념 설명 (이미지 위치 표시 포함)
-        3. 예시와 연습 문제
-        4. 상호작용 활동 제안
-        5. 학습 정리
-        
-        각 섹션에서 적절한 위치에 [이미지: 설명] 형태로 이미지 위치를 표시해주세요.
-        상호작용 요소는 [상호작용: 활동 설명] 형태로 표시해주세요.
-        """
-        
-        main_content = self.make_request(
-            config.model,
-            [
-                {"role": "system", "content": content_prompt},
-                {"role": "user", "content": config.to_prompt_string()}
-            ]
-        )
-        
-        # 2. 상호작용 컨텐츠 생성
-        interactive_content = None
-        if "상호작용 활동" in config.content_types:
-            interactive_content = self.make_request(
+        try:
+            # 과목별 프롬프트 선택
+            base_prompt = (ELEMENTARY_ENGLISH_PROMPT if config.subject == "영어" 
+                          else ELEMENTARY_MATH_PROMPT)
+            
+            # 1. 기본 컨텐츠 생성
+            content_logger.log_step("기본 컨텐츠 생성", "교과서 본문 내용 생성 중...")
+            
+            content_prompt = f"""{base_prompt}
+            
+            학년: {config.grade}
+            학기: {config.semester}
+            단원명: {config.unit_name}
+            학습 목표: {config.learning_objectives}
+            
+            다음 형식으로 컨텐츠를 생성해주세요:
+            1. 도입부 (학습 동기 유발)
+            2. 핵심 개념 설명 (이미지 위치 표시 포함)
+            3. 예시와 연습 문제
+            4. 상호작용 활동 제안
+            5. 학습 정리
+            
+            각 섹션에서 적절한 위치에 [이미지: 설명] 형태로 이미지 위치를 표시해주세요.
+            상호작용 요소는 [상호작용: 활동 설명] 형태로 표시해주세요.
+            """
+            
+            main_content = self.make_request(
                 config.model,
                 [
-                    {"role": "system", "content": INTERACTIVE_CONTENT_PROMPT},
-                    {"role": "user", "content": f"기본 컨텐츠: {main_content}\n\n위 내용을 바탕으로 상호작용 활동을 구체적으로 설계해주세요."}
+                    {"role": "system", "content": content_prompt},
+                    {"role": "user", "content": config.to_prompt_string()}
                 ]
             )
-        
-        # 3. 퀴즈 생성
-        quiz_content = None
-        if "퀴즈" in config.content_types:
-            quiz_content = self.make_request(
-                config.model,
-                [
-                    {"role": "system", "content": QUIZ_GENERATOR_PROMPT},
-                    {"role": "user", "content": f"학습 내용: {main_content}\n\n위 내용을 바탕으로 {config.grade} 수준의 퀴즈를 5문제 생성해주세요."}
-                ]
+            content_logger.log_completion("기본 컨텐츠 생성", len(main_content))
+            
+            # 2. 상호작용 컨텐츠 생성
+            interactive_content = None
+            if "상호작용 활동" in config.content_types:
+                content_logger.log_step("상호작용 컨텐츠 생성", "인터랙티브 활동 생성 중...")
+                interactive_content = self.make_request(
+                    config.model,
+                    [
+                        {"role": "system", "content": INTERACTIVE_CONTENT_PROMPT},
+                        {"role": "user", "content": f"기본 컨텐츠: {main_content}\n\n위 내용을 바탕으로 상호작용 활동을 구체적으로 설계해주세요."}
+                    ]
+                )
+                content_logger.log_completion("상호작용 컨텐츠 생성", len(interactive_content))
+            
+            # 3. 퀴즈 생성
+            quiz_content = None
+            if "퀴즈" in config.content_types:
+                content_logger.log_step("퀴즈 생성", "평가 문제 생성 중...")
+                quiz_content = self.make_request(
+                    config.model,
+                    [
+                        {"role": "system", "content": QUIZ_GENERATOR_PROMPT},
+                        {"role": "user", "content": f"학습 내용: {main_content}\n\n위 내용을 바탕으로 {config.grade} 수준의 퀴즈를 5문제 생성해주세요."}
+                    ]
+                )
+                content_logger.log_completion("퀴즈 생성", len(quiz_content))
+            
+            # 완료 로깅
+            total_time = time.time() - start_time
+            content_logger.log_finish(total_time)
+            
+            return GeneratedContent(
+                main_content=main_content,
+                interactive_content=interactive_content,
+                quiz_content=quiz_content
             )
-        
-        return GeneratedContent(
-            main_content=main_content,
-            interactive_content=interactive_content,
-            quiz_content=quiz_content
-        )
+            
+        except Exception as e:
+            content_logger.log_error("컨텐츠 생성", str(e))
+            raise
 
 
 # 싱글톤 인스턴스
