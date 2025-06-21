@@ -5,9 +5,11 @@ from typing import Optional, Tuple, List, Dict, Any
 from openai import OpenAI
 import ollama
 import streamlit as st
+import time
 
 from src.config.settings import settings
 from src.models.content_types import Provider, CourseConfig, GeneratedContent
+from src.utils.logger import content_logger
 from prompts.elementary_english_prompt import ELEMENTARY_ENGLISH_PROMPT
 from prompts.elementary_math_prompt import ELEMENTARY_MATH_PROMPT
 from prompts.interactive_content_prompt import INTERACTIVE_CONTENT_PROMPT
