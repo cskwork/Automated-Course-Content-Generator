@@ -15,6 +15,106 @@ from prompts.interactive_content_prompt import INTERACTIVE_CONTENT_PROMPT
 from prompts.quiz_generator_prompt import QUIZ_GENERATOR_PROMPT
 
 
+# Unsplash API 함수들
+def search_unsplash_images(query, per_page=5):
+    """Unsplash API를 사용하여 이미지 검색"""
+    api_key = os.getenv("UNSPLASH_API_KEY")
+    if not api_key:
+        st.warning("UNSPLASH_API_KEY가 설정되지 않았습니다. 이미지가 표시되지 않습니다.")
+        return []
+    
+    # API 엔드포인트
+    url = "https://api.unsplash.com/search/photos"
+    
+    # 헤더 설정
+    headers = {
+        "Authorization": f"Client-ID {api_key}"
+    }
+    
+    # 파라미터 설정
+    params = {
+        "query": query,
+        "per_page": per_page,
+        "orientation": "landscape",  # 가로 이미지 선호
+        "content_filter": "high"     # 안전한 콘텐츠만
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # 이미지 정보 추출
+        images = []
+        for photo in data.get("results", []):
+            images.append({
+                "id": photo["id"],
+                "url": photo["urls"]["regular"],
+                "thumb_url": photo["urls"]["small"],
+                "description": photo.get("description", photo.get("alt_description", "")),
+                "author": photo["user"]["name"],
+                "author_url": photo["user"]["links"]["html"]
+            })
+        
+        return images
+    except requests.exceptions.RequestException as e:
+        st.error(f"Unsplash API 오류: {str(e)}")
+        return []
+
+def get_image_for_topic(topic, subject="educational"):
+    """주제에 맞는 교육용 이미지 가져오기"""
+    # 교육용 키워드 추가
+    educational_keywords = {
+        "영어": "english learning kids education",
+        "수학": "mathematics education kids learning"
+    }
+    
+    # 주제별 검색어 생성
+    base_keyword = educational_keywords.get(subject, "education learning")
+    search_query = f"{topic} {base_keyword}"
+    
+    # 이미지 검색
+    images = search_unsplash_images(search_query, per_page=1)
+    
+    if images:
+        return images[0]
+    else:
+        # 대체 검색어로 재시도
+        images = search_unsplash_images(base_keyword, per_page=1)
+        return images[0] if images else None
+
+def extract_image_placeholders(content):
+    """컨텐츠에서 이미지 플레이스홀더 추출"""
+    import re
+    pattern = r'\[이미지: ([^\]]+)\]'
+    matches = re.findall(pattern, content)
+    return matches
+
+def replace_image_placeholders(content, subject):
+    """이미지 플레이스홀더를 실제 이미지로 교체"""
+    placeholders = extract_image_placeholders(content)
+    
+    for placeholder in placeholders:
+        image_info = get_image_for_topic(placeholder, subject)
+        
+        if image_info:
+            # HTML 이미지 태그로 교체
+            image_html = f'''
+            <div class="image-container">
+                <img src="{image_info['url']}" alt="{placeholder}" style="width: 100%; max-width: 600px; border-radius: 8px;">
+                <p class="image-caption">
+                    <small>{placeholder} - Photo by <a href="{image_info['author_url']}?utm_source=course_generator&utm_medium=referral" target="_blank">{image_info['author']}</a> on <a href="https://unsplash.com/?utm_source=course_generator&utm_medium=referral" target="_blank">Unsplash</a></small>
+                </p>
+            </div>
+            '''
+            content = content.replace(f'[이미지: {placeholder}]', image_html)
+        else:
+            # 이미지를 찾을 수 없는 경우 플레이스홀더 유지
+            content = content.replace(f'[이미지: {placeholder}]', f'<div class="image-placeholder">이미지: {placeholder}</div>')
+    
+    return content
+
+
 def generate_pdf(content, filename):
     content = unicodedata.normalize('NFKD', content).encode('utf-8', 'ignore').decode('utf-8')
     pdf = FPDF()
@@ -72,6 +172,29 @@ def generate_html(content, filename):
                 text-align: center;
                 border-radius: 8px;
                 margin: 20px 0;
+                color: #666;
+                font-style: italic;
+            }}
+            .image-container {{
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .image-container img {{
+                max-width: 100%;
+                height: auto;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }}
+            .image-caption {{
+                margin-top: 10px;
+                color: #666;
+                font-size: 0.9em;
+            }}
+            .image-caption a {{
+                color: #2196f3;
+                text-decoration: none;
+            }}
+            .image-caption a:hover {{
+                text-decoration: underline;
             }}
         </style>
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
@@ -427,6 +550,34 @@ with col2:
                 {f'<div class="quiz"><h3>퀴즈</h3>{quiz_content}</div>' if quiz_content else ''}
             </div>
             """
+            
+            # Unsplash API를 사용하여 이미지 플레이스홀더를 실제 이미지로 교체
+            if os.getenv("UNSPLASH_API_KEY"):
+                with st.spinner("관련 이미지를 검색중입니다... 🖼️"):
+                    # 메인 컨텐츠의 이미지 교체
+                    main_content_with_images = replace_image_placeholders(main_content, subject)
+                    # 상호작용 컨텐츠의 이미지 교체
+                    if interactive_content:
+                        interactive_content_with_images = replace_image_placeholders(interactive_content, subject)
+                    else:
+                        interactive_content_with_images = interactive_content
+                    
+                    # 최종 컨텐츠 조합 (이미지 포함)
+                    full_content = f"""
+                    <div class="module">
+                        <h1>{grade} {semester} - {unit_name}</h1>
+                        <h2>학습 목표</h2>
+                        <p>{learning_objectives}</p>
+                        
+                        <div class="content">
+                            {main_content_with_images}
+                        </div>
+                        
+                        {f'<div class="interactive"><h3>상호작용 활동</h3>{interactive_content_with_images}</div>' if interactive_content_with_images else ''}
+                        
+                        {f'<div class="quiz"><h3>퀴즈</h3>{quiz_content}</div>' if quiz_content else ''}
+                    </div>
+                    """
             
             st.session_state['generated_content'] = full_content
             st.session_state['content_generated'] = True
