@@ -3,11 +3,13 @@
 """
 import unicodedata
 import base64
+import os
 from fpdf import FPDF  # type: ignore
 import streamlit as st
 import markdown2
 
 from src.models.content_types import ExportFormat
+from src.config.settings import settings
 
 
 class ExportService:
@@ -54,6 +56,14 @@ class ExportService:
     @staticmethod
     def generate_pdf(content: str, filename: str) -> FPDF:
         """PDF 파일 생성"""
+        # 출력 디렉토리 생성
+        output_dir = settings.OUTPUT_DIR
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # 파일 경로를 output 폴더로 설정
+        filepath = os.path.join(output_dir, filename)
+        
         # 유니코드 정규화
         content = unicodedata.normalize('NFKD', content).encode('utf-8', 'ignore').decode('utf-8')
         
@@ -61,12 +71,20 @@ class ExportService:
         pdf.add_page()
         pdf.set_font('Arial', 'B', 12)
         pdf.multi_cell(0, 10, content)
-        pdf.output(filename, 'F')
+        pdf.output(filepath, 'F')
         return pdf
     
     @staticmethod
     def generate_html(content: str, filename: str) -> str:
         """HTML 파일 생성"""
+        # 출력 디렉토리 생성
+        output_dir = settings.OUTPUT_DIR
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # 파일 경로를 output 폴더로 설정
+        filepath = os.path.join(output_dir, filename)
+        
         html_template = """
         <!DOCTYPE html>
         <html lang="ko">
@@ -213,10 +231,10 @@ class ExportService:
         </html>
         """
         
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_template.format(content=content))
         
-        return filename
+        return filepath
     
     @staticmethod
     def create_download_buttons(content: str, format_type: str) -> None:

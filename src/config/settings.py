@@ -53,6 +53,7 @@ class Settings:
     
     # 파일 설정
     CHAT_HISTORY_FILE = "chat_history"
+    OUTPUT_DIR = "output"
     
     # 이미지 검색 설정
     EDUCATIONAL_KEYWORDS = {

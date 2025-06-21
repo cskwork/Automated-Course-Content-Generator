@@ -2,9 +2,13 @@
 __pycache__/
 *.py[cod]
 chat_history
+output/
+*.bak 
+*.dat 
+*.dir
 # C extensions
 *.so
-
+/output
 # Distribution / packaging
 .Python
 env/
