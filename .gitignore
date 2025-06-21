@@ -90,3 +90,7 @@ target/
 # Exlcude the database file
 .db
 /data
+
+# Backup files
+backup/
+app_legacy.py
