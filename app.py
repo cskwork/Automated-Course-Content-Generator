@@ -1,4 +1,5 @@
 from openai import OpenAI, OpenAIError
+import ollama
 import streamlit as st
 from dotenv import load_dotenv
 import os
@@ -8,14 +9,14 @@ import unicodedata
 from fpdf import FPDF # type: ignore
 import base64
 import requests
-# from prompts.coursify_prompt import COURSIFY_PROMPT
-from prompts.tabler_prompt import TABLER_PROMPT
-from prompts.dictator_prompt import DICTATOR_PROMPT
-from prompts.quizzy_prompt import QUIZZY_PROMPT
+from prompts.elementary_english_prompt import ELEMENTARY_ENGLISH_PROMPT
+from prompts.elementary_math_prompt import ELEMENTARY_MATH_PROMPT
+from prompts.interactive_content_prompt import INTERACTIVE_CONTENT_PROMPT
+from prompts.quiz_generator_prompt import QUIZ_GENERATOR_PROMPT
 
 
 def generate_pdf(content, filename):
-    content = unicodedata.normalize('NFKD', content).encode('ascii', 'ignore').decode('ascii')
+    content = unicodedata.normalize('NFKD', content).encode('utf-8', 'ignore').decode('utf-8')
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font('Arial', 'B', 12)
@@ -23,20 +24,109 @@ def generate_pdf(content, filename):
     pdf.output(filename, 'F')
     return pdf
 
+def generate_html(content, filename):
+    """HTML 파일 생성 함수"""
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>디지털 교과서 컨텐츠</title>
+        <style>
+            body {
+                font-family: 'Noto Sans KR', sans-serif;
+                line-height: 1.8;
+                padding: 20px;
+                max-width: 1200px;
+                margin: 0 auto;
+                background-color: #f5f5f5;
+            }
+            .module {
+                background: white;
+                padding: 30px;
+                margin-bottom: 20px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .interactive {
+                background: #e3f2fd;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 8px;
+                border-left: 4px solid #2196f3;
+            }
+            .quiz {
+                background: #fff3e0;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 8px;
+                border-left: 4px solid #ff9800;
+            }
+            h1, h2, h3 {
+                color: #333;
+            }
+            .image-placeholder {
+                background: #f0f0f0;
+                padding: 40px;
+                text-align: center;
+                border-radius: 8px;
+                margin: 20px 0;
+            }
+        </style>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    </head>
+    <body>
+        {content}
+    </body>
+    </html>
+    """
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(html_template.format(content=content))
+    
+    return filename
+
 # Customizing the page configuration
 st.set_page_config(
-    page_title="Automated Course Content Generator",
-    page_icon=":robot:",
+    page_title="초등 디지털 교과서 컨텐츠 생성기",
+    page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 load_dotenv()
 
-st.title("Automated Course Content Generator 🤖")
+st.title("🇰🇷 초등 디지털 교과서 컨텐츠 생성기 📚")
 
 USER_AVATAR = "👤"
 BOT_AVATAR = "🤖"
+
+# Helper function to make AI API calls
+def make_ai_request(client, provider, model, messages):
+    """Make API request to different AI providers with unified interface"""
+    if provider in ['openai', 'openrouter']:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+        return response.choices[0].message.content
+    elif provider == 'ollama':
+        # Convert messages format for Ollama
+        ollama_messages = []
+        for msg in messages:
+            ollama_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        
+        response = client.chat(
+            model=model,
+            messages=ollama_messages
+        )
+        return response['message']['content']
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
 
 # Initialize AI client based on provider selection
 def initialize_ai_client():
@@ -45,7 +135,7 @@ def initialize_ai_client():
     if provider == 'openai':
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            st.error("Please provide OPENAI_API_KEY in your .env file")
+            st.error("OPENAI_API_KEY를 .env 파일에 설정해주세요")
             return None
         return OpenAI(api_key=api_key), 'openai'
     
@@ -53,17 +143,29 @@ def initialize_ai_client():
         api_key = os.getenv("OPENROUTER_API_KEY")
         base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         if not api_key:
-            st.error("Please provide OPENROUTER_API_KEY in your .env file")
+            st.error("OPENROUTER_API_KEY를 .env 파일에 설정해주세요")
             return None
         # OpenRouter uses OpenAI-compatible API
         return OpenAI(api_key=api_key, base_url=base_url), 'openrouter'
+    
+    elif provider == 'ollama':
+        host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        try:
+            # Test connection to Ollama
+            client = ollama.Client(host=host)
+            # Try to list models to verify connection
+            client.list()
+            return client, 'ollama'
+        except Exception as e:
+            st.error(f"Ollama 연결 실패: {str(e)}. Ollama가 실행중인지 확인해주세요.")
+            return None
     
     return None, None
 
 try:
     client, current_provider = initialize_ai_client()
 except Exception as e:
-    st.error(f"Error initializing AI client: {str(e)}")
+    st.error(f"AI 클라이언트 초기화 오류: {str(e)}")
     client, current_provider = None, None
 
 # Initialize session state for AI provider and model
@@ -74,9 +176,11 @@ if "ai_provider" not in st.session_state:
 
 if "ai_model" not in st.session_state:
     if st.session_state["ai_provider"] == "openai":
-        st.session_state["ai_model"] = "gpt-3.5-turbo"
-    else:  # openrouter
-        st.session_state["ai_model"] = "openai/gpt-3.5-turbo"
+        st.session_state["ai_model"] = "gpt-4"
+    elif st.session_state["ai_provider"] == "openrouter":
+        st.session_state["ai_model"] = "openai/gpt-4"
+    else:  # ollama
+        st.session_state["ai_model"] = os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:latest")
 
 # Load chat history from shelve file
 def load_chat_history():
@@ -94,7 +198,7 @@ if "messages" not in st.session_state:
 
 # Sidebar with a button to delete chat history
 with st.sidebar:
-    if st.button("Delete Chat History"):
+    if st.button("대화 기록 삭제"):
         st.session_state.messages = []
         save_chat_history([])
 
@@ -104,16 +208,16 @@ col1, col2 = st.columns(2)
 col1, col_divider, col2 = st.columns([3.0,0.1,7.0])
 
 with col1:
-    st.header("Course Details 📋")
+    st.header("교과서 설정 📋")
     
     # AI Provider Selection
-    st.subheader("AI Provider Settings")
-    provider_options = ["openai", "openrouter"]
+    st.subheader("AI 설정")
+    provider_options = ["openai", "openrouter", "ollama"]
     selected_provider = st.selectbox(
-        "Choose AI Provider",
+        "AI 제공자 선택",
         provider_options,
         index=provider_options.index(st.session_state.get("ai_provider", "openai")),
-        help="Select your preferred AI provider"
+        help="사용할 AI 제공자를 선택하세요"
     )
     
     # Update session state if provider changed
@@ -123,14 +227,16 @@ with col1:
         client, current_provider = initialize_ai_client()
         # Update default model based on provider
         if selected_provider == "openai":
-            st.session_state["ai_model"] = "gpt-3.5-turbo"
-        else:  # openrouter
-            st.session_state["ai_model"] = "openai/gpt-3.5-turbo"
+            st.session_state["ai_model"] = "gpt-4"
+        elif selected_provider == "openrouter":
+            st.session_state["ai_model"] = "openai/gpt-4"
+        else:  # ollama
+            st.session_state["ai_model"] = os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:latest")
     
     # Model Selection based on provider
     if selected_provider == "openai":
         model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
-    else:  # openrouter
+    elif selected_provider == "openrouter":
         model_options = [
             "openai/gpt-3.5-turbo",
             "openai/gpt-4",
@@ -140,308 +246,230 @@ with col1:
             "meta-llama/llama-3.1-8b-instruct",
             "google/gemini-pro"
         ]
+    else:  # ollama
+        # Get available Ollama models dynamically
+        try:
+            if client:
+                available_models = client.list()
+                model_options = [model['name'] for model in available_models['models']]
+                if not model_options:
+                    model_options = ["llama3.2", "llama3.1", "codellama", "mistral", "qwen2.5"]
+            else:
+                model_options = ["gemma3:latest", "llama3.2", "llama3.1", "codellama", "mistral", "qwen2.5"]
+        except:
+            model_options = ["gemma3:latest", "llama3.2", "llama3.1", "codellama", "mistral", "qwen2.5"]
     
     selected_model = st.selectbox(
-        "Choose Model",
+        "AI 모델 선택",
         model_options,
         index=model_options.index(st.session_state.get("ai_model", model_options[0])) if st.session_state.get("ai_model") in model_options else 0,
-        help="Select the AI model to use for content generation"
+        help="컨텐츠 생성에 사용할 AI 모델을 선택하세요"
     )
     st.session_state["ai_model"] = selected_model
     
     st.divider()
     
-    # Interactive widgets for course details
-    course_name = st.text_input("Course Name")
-    target_audience_edu_level = st.selectbox(
-        "Target Audience Edu Level",
-        ["Primary", "High School", "Diploma", "Bachelors", "Masters"]
+    # 한국 초등학교 교육과정 설정
+    subject = st.selectbox(
+        "과목 선택",
+        ["영어", "수학"]
     )
-    difficulty_level = st.radio(
-        "Course Difficulty Level",
-        ["Beginner", "Intermediate", "Advanced"]
+    
+    grade = st.selectbox(
+        "학년",
+        ["1학년", "2학년", "3학년", "4학년", "5학년", "6학년"]
     )
-    num_modules = st.slider(
-        "No. of Modules",
-        min_value=1, max_value=15
+    
+    semester = st.selectbox(
+        "학기",
+        ["1학기", "2학기"]
     )
-    course_duration = st.text_input("Course Duration")
-    course_credit = st.text_input("Course Credit")
+    
+    unit_name = st.text_input("단원명")
+    
+    learning_objectives = st.text_area("학습 목표", height=100)
+    
+    # 컨텐츠 유형 선택
+    content_types = st.multiselect(
+        "포함할 컨텐츠 유형",
+        ["개념 설명", "예시 문제", "상호작용 활동", "시각 자료", "퀴즈", "게임형 학습"],
+        default=["개념 설명", "예시 문제", "상호작용 활동", "퀴즈"]
+    )
+    
+    # Export 형식 선택
+    export_format = st.radio(
+        "내보내기 형식",
+        ["HTML", "PDF", "둘 다"]
+    )
 
     # Save widget states in session_state
-    st.session_state.course_name = course_name
-    st.session_state.target_audience_edu_level = target_audience_edu_level
-    st.session_state.difficulty_level = difficulty_level
-    st.session_state.num_modules = num_modules
-    st.session_state.course_duration = course_duration
-    st.session_state.course_credit = course_credit
-
-
+    st.session_state.subject = subject
+    st.session_state.grade = grade
+    st.session_state.semester = semester
+    st.session_state.unit_name = unit_name
+    st.session_state.learning_objectives = learning_objectives
+    st.session_state.content_types = content_types
+    st.session_state.export_format = export_format
 
     button1, button2 = st.columns([1, 0.8])
     with button1:
-        generate_button = st.button("Generate Course Outline", help="Click me to generate course outline!😁")
+        generate_button = st.button("컨텐츠 생성", help="클릭하여 디지털 교과서 컨텐츠를 생성하세요! 🎯")
     with button2:
-        if "pdf" in st.session_state:
-            new_course_button = st.button("Start a New Course", help="Click me to start a new course!💡")
-            if new_course_button:
-                st.session_state.course_name = ""
-                st.session_state.target_audience_edu_level = ""
-                st.session_state.difficulty_level = ""
-                st.session_state.num_modules = 1
-                st.session_state.course_duration = ""
-                st.session_state.course_credit = ""
-                st.session_state.pdf = False
+        if "content_generated" in st.session_state:
+            new_content_button = st.button("새 컨텐츠", help="새로운 컨텐츠를 만들어보세요! 💡")
+            if new_content_button:
+                # 세션 상태 초기화
+                for key in ['subject', 'grade', 'semester', 'unit_name', 'learning_objectives', 
+                           'content_types', 'content_generated', 'generated_content']:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.experimental_rerun()
                 
     
 
 
 with col2:
-    st.header("Generated Course Content 📝")
+    st.header("생성된 교과서 컨텐츠 📝")
     # Display the generated content here
-    if generate_button and "pdf" not in st.session_state:
+    if generate_button and "content_generated" not in st.session_state:
         if not client:
-            st.error("Please configure your API key in the .env file for the selected provider.")
+            st.error("선택한 AI 제공자의 API 키를 .env 파일에 설정해주세요.")
             st.stop()
         # Include user selections in the message history
-        user_selections = f"Course Name: {course_name}\nTarget Audience Edu Level: {target_audience_edu_level}\nDifficulty Level: {difficulty_level}\nNo. of Modules: {num_modules}\nCourse Duration: {course_duration}\nCourse Credit: {course_credit}"
+        user_selections = f"""
+        과목: {subject}
+        학년: {grade}
+        학기: {semester}
+        단원명: {unit_name}
+        학습 목표: {learning_objectives}
+        컨텐츠 유형: {', '.join(content_types)}
+        """
         st.session_state.messages.append({"role": "user", "content": user_selections})
 
-        PROMPT=f"You are Prompter, the world's best Prompt Engineer. I am using another GenAI tool, Tabler, that helps in generating a course outline for trainers and professionals for the automated course content generation for their courses. Your job is to strictly use the only following inputs: 1) Course Name: {course_name} 2) Target Audience Edu Level: {target_audience_edu_level} 3) Course Difficulty Level: {difficulty_level} 4) No. of Modules: {num_modules} 5) Course Duration: {course_duration} 6) Course Credit: {course_credit}.  to generate a prompt for Tabler so that it can produce the best possible outputs. The prompt that you generate must be comprehensive and strictly follow the above given inputs and also mention the given inputs in the prompt you generate. Moreover, it is your job to also identify if the course name is appropriate and not gibberish."
-
-        response = client.chat.completions.create(
-            model=st.session_state["ai_model"],
-            messages=[
-                {"role": "system", "content": PROMPT},
-            ]
-        )
-        generated_prompt = response.choices[0].message.content
-        # st.success("Prompt generated successfully!")
-        # st.write(generated_prompt)
-        
-        
-        with st.spinner("Generating course outline..."):
-            response = client.chat.completions.create(
-                model=st.session_state["ai_model"],
-                messages=[
-                    {"role": "system", "content": TABLER_PROMPT},
-                    {"role": "user", "content": generated_prompt},
+        # 과목에 따라 적절한 프롬프트 선택
+        if subject == "영어":
+            base_prompt = ELEMENTARY_ENGLISH_PROMPT
+        else:  # 수학
+            base_prompt = ELEMENTARY_MATH_PROMPT
+            
+        # 전체 컨텐츠 생성
+        with st.spinner("디지털 교과서 컨텐츠를 생성중입니다... 📚"):
+            # 1. 기본 컨텐츠 생성
+            content_prompt = f"""{base_prompt}
+            
+            학년: {grade}
+            학기: {semester}
+            단원명: {unit_name}
+            학습 목표: {learning_objectives}
+            
+            다음 형식으로 컨텐츠를 생성해주세요:
+            1. 도입부 (학습 동기 유발)
+            2. 핵심 개념 설명 (이미지 위치 표시 포함)
+            3. 예시와 연습 문제
+            4. 상호작용 활동 제안
+            5. 학습 정리
+            
+            각 섹션에서 적절한 위치에 [이미지: 설명] 형태로 이미지 위치를 표시해주세요.
+            상호작용 요소는 [상호작용: 활동 설명] 형태로 표시해주세요.
+            """
+            
+            main_content = make_ai_request(
+                client, 
+                current_provider, 
+                st.session_state["ai_model"],
+                [
+                    {"role": "system", "content": content_prompt},
+                    {"role": "user", "content": user_selections}
                 ]
             )
-            Course_outline = response.choices[0].message.content
-            st.success("Course outline generated successfully!")
-
-            # with st.expander("Course Outline"):
-            #     st.write(Course_outline)
-
-            st.session_state['course_outline'] = Course_outline
-            st.session_state['buttons_visible'] = True
-
-    
-    if 'course_outline' in st.session_state and "pdf" not in st.session_state:
-        with st.expander("Course Outline"):
-            st.write(st.session_state['course_outline'])
-
-        if 'buttons_visible' in st.session_state and st.session_state['buttons_visible']:
-            button1, button2 = st.columns([1, 2])
-            with button1:
-                complete_course_button = st.button("Looks cool. Generate complete course!", help="Click me to generate complete course!😍")
-            with button2:
-                modifications_button = st.button("Wai wait..!, I need to make some modifications", help="Click me to modify the course outline!🧐")
-
-            # Handle button actions
-            if complete_course_button:
-                st.session_state['complete_course'] = True
-                st.session_state['modifications'] = False
-            elif modifications_button:
-                st.session_state['modifications'] = True
-                st.session_state['complete_course'] = False
-
-            if 'complete_course' in st.session_state and st.session_state['complete_course']:
-                with st.spinner("Generating complete course..."):
-                    response = client.chat.completions.create(
-                        model=st.session_state["ai_model"],
-                        messages=[
-                            {"role": "system", "content": DICTATOR_PROMPT},
-                            {"role": "user", "content": st.session_state['course_outline']},
-                        ]
-                    )
-                    Dict = response.choices[0].message.content
-                    # st.success("DICTator is here!")
-                    # st.write(Dict)
-
-                    
-                    module_lessons = json.loads(Dict)
-                    # st.write(module_lessons)
-
-                    for module_name in module_lessons:
-                        module_content = ""
-
-                        for lesson_name in module_lessons[module_name]:
-                            module_lesson_prompt =f"""You are Coursify, an AI assistant specialized in generating high-quality educational content for online courses. Your knowledge spans a wide range of academic and professional domains, allowing you to create in-depth and engaging material on any given topic. For this task, you will be generating detailed content for the lesson '{lesson_name}' which is part of the module '{module_name}' in the course '{course_name}'. Your goal is to provide a comprehensive and learner-friendly exploration of this specific topic, covering all relevant concepts, theories, and practical applications, as if you were an experienced instructor teaching the material.
-
-                            To ensure the content is effective and aligns with best practices in instructional design, you will follow Bloom's Taxonomy approach. This means structuring the material in a way that progressively builds learners' knowledge and skills, starting from foundational concepts and working up to higher-order thinking and application. Your response should be verbose, with in-depth explanations, multiple examples, and a conversational tone that mimics an instructor's teaching style.
-
-                            The structure of your response should include (but NOT limited to) the following elements:
-
-                            1) Introduce the topic and provide context, explaining its relevance and importance within the broader course and domain, as an instructor would do in a classroom setting.
-                            2) Define and clarify key terms, concepts, and principles related to the topic, with detailed explanations, analogies, and examples to aid comprehension.
-                            3) Present thorough, step-by-step explanations of the concepts, using real-world scenarios, visual aids, and analogies to ensure learners grasp the material.
-                            4) Discuss real-world applications, case studies, or scenarios that demonstrate the practical implications of the topic, drawing from industry best practices and authoritative sources.
-                            5) Incorporate interactive elements, such as reflective questions, exercises, or problem-solving activities, to engage learners and reinforce their understanding, as an instructor would do in a classroom.
-                            6) Seamlessly integrate relevant tangential concepts or background information as needed to provide a well-rounded learning experience, ensuring learners have the necessary foundational knowledge.
-                            7) Maintain a conversational, approachable tone while ensuring accuracy and depth of content, as if you were an experienced instructor teaching the material.
-
-                            Remember, the goal is to create a comprehensive and self-contained learning resource on the specified topic, with the level of detail and instructional quality that one would expect from an expert instructor. Your output should be formatted using Markdown for clarity and easy integration into course platforms.
-                            Note: Add a blank line at the end of the course content.
-                            Make sure the content generated is easily convertible to a sensible using HTML Tags.
-                            """
-                            with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
-                                response = client.chat.completions.create(
-                                    model=st.session_state["ai_model"],
-                                    messages=[
-                                        {"role": "system", "content": module_lesson_prompt},
-                                        # {"role": "user", "content": st.session_state['course_outline']},
-                                    ]
-                                )
-                                complete_course = response.choices[0].message.content
-                                st.success(f"Generated content for {module_name}, {lesson_name}")
-
-                                with st.expander("Click to view!"):
-                                    st.write(complete_course)
-                                
-                                module_content +=  complete_course + "\n"*2
-                        quizzy_prompt_final = QUIZZY_PROMPT + module_content
-                        with st.spinner(f"Generating quiz questions for {module_name}"):
-                            res = client.chat.completions.create(
-                                model=st.session_state["ai_model"],
-                                messages=[
-                                    {"role": "system", "content": quizzy_prompt_final},
-                                    # {"role": "user", "content": st.session_state['course_outline']},
-                                ]
-                            )
-                            quiz_questions = res.choices[0].message.content
-
-                            st.success(f"Quiz time!! Generated quiz questions for {module_name}")
-                            with st.expander("Click to view!"):
-                                st.write(quiz_questions)
-
-                            if "pdf" not in st.session_state:
-                                complete_course_content = module_content + "\n\n" + quiz_questions
-                                st.session_state.pdf = generate_pdf(complete_course_content, "course.pdf")
-                                b64 = base64.b64encode(st.session_state.pdf.output(dest="S").encode('latin1')).decode()
-                                st.success("Your PDF file is ready!")
-
-                            button_label = "Download PDF"
-                            st.download_button(label=button_label, data=b64, file_name="course.pdf", mime="application/pdf", key="download_pdf_button")
-                                    
-
-                        break
-
+            
+            # 2. 상호작용 컨텐츠 생성
+            if "상호작용 활동" in content_types:
+                interactive_content = make_ai_request(
+                    client,
+                    current_provider,
+                    st.session_state["ai_model"],
+                    [
+                        {"role": "system", "content": INTERACTIVE_CONTENT_PROMPT},
+                        {"role": "user", "content": f"기본 컨텐츠: {main_content}\n\n위 내용을 바탕으로 상호작용 활동을 구체적으로 설계해주세요."}
+                    ]
+                )
+            else:
+                interactive_content = ""
+            
+            # 3. 퀴즈 생성
+            if "퀴즈" in content_types:
+                quiz_content = make_ai_request(
+                    client,
+                    current_provider,
+                    st.session_state["ai_model"],
+                    [
+                        {"role": "system", "content": QUIZ_GENERATOR_PROMPT},
+                        {"role": "user", "content": f"학습 내용: {main_content}\n\n위 내용을 바탕으로 {grade} 수준의 퀴즈를 5문제 생성해주세요."}
+                    ]
+                )
+            else:
+                quiz_content = ""
+            
+            # 전체 컨텐츠 조합
+            full_content = f"""
+            <div class="module">
+                <h1>{grade} {semester} - {unit_name}</h1>
+                <h2>학습 목표</h2>
+                <p>{learning_objectives}</p>
                 
-            elif 'modifications' in st.session_state:
-                modifications = st.text_input("Please enter the modifications you'd like to make:")
-                if modifications:
-                    st.session_state.modifications = modifications
-                    Mod = f""" I have provided you with the "course outline" and "modifications". Your task is to modify the existing course outline using modifications provided, and give complete modified course outline as the output. 
-                    modifications:
-                    {st.session_state.modifications} 
-                    course outline:
-                    {st.session_state['course_outline']}"""
+                <div class="content">
+                    {main_content.replace('[이미지:', '<div class="image-placeholder">이미지: ').replace(']', '</div>')}
+                </div>
+                
+                {f'<div class="interactive"><h3>상호작용 활동</h3>{interactive_content}</div>' if interactive_content else ''}
+                
+                {f'<div class="quiz"><h3>퀴즈</h3>{quiz_content}</div>' if quiz_content else ''}
+            </div>
+            """
+            
+            st.session_state['generated_content'] = full_content
+            st.session_state['content_generated'] = True
+            st.success("컨텐츠가 성공적으로 생성되었습니다! ✨")
 
-                    response = client.chat.completions.create(
-                        model=st.session_state["ai_model"],
-                        messages=[
-                            {"role": "system", "content": TABLER_PROMPT},
-                            {"role": "user", "content": Mod},
-                        ]
+    # 생성된 컨텐츠 표시
+    if 'generated_content' in st.session_state:
+        with st.expander("생성된 컨텐츠 미리보기"):
+            st.markdown(st.session_state['generated_content'], unsafe_allow_html=True)
+        
+        # Export 옵션
+        col1, col2 = st.columns(2)
+        
+        if st.session_state.export_format in ["HTML", "둘 다"]:
+            with col1:
+                # HTML 파일 생성
+                html_file = generate_html(st.session_state['generated_content'], "digital_textbook.html")
+                with open(html_file, 'r', encoding='utf-8') as f:
+                    html_data = f.read()
+                st.download_button(
+                    label="HTML로 다운로드 🌐",
+                    data=html_data,
+                    file_name="digital_textbook.html",
+                    mime="text/html"
+                )
+        
+        if st.session_state.export_format in ["PDF", "둘 다"]:
+            with col2:
+                # PDF 생성 (한글 지원 필요)
+                try:
+                    pdf = generate_pdf(st.session_state['generated_content'], "digital_textbook.pdf")
+                    b64 = base64.b64encode(pdf.output(dest="S").encode('latin1')).decode()
+                    st.download_button(
+                        label="PDF로 다운로드 📄",
+                        data=b64,
+                        file_name="digital_textbook.pdf",
+                        mime="application/pdf"
                     )
-                    Mod_CO = response.choices[0].message.content
-
-                    with st.spinner("Generating complete course with the specified modifications..."):
-                        response = client.chat.completions.create(
-                            model=st.session_state["ai_model"],
-                            messages=[
-                                {"role": "system", "content": DICTATOR_PROMPT},
-                                {"role": "user", "content": Mod_CO},
-                            ]
-                        )
-                        Dict = response.choices[0].message.content
-                        # st.success("DICTator is here!")
-                        # st.write(Dictt)
-
-                        
-                        module_lessons = json.loads(Dict)
-                        # st.write(module_lessons)
-
-                        for module_name in module_lessons:
-                            module_content = ""
-
-                            for lesson_name in module_lessons[module_name]:
-                                module_lesson_prompt =f"""You are Coursify, an AI assistant specialized in generating high-quality educational content for online courses. Your knowledge spans a wide range of academic and professional domains, allowing you to create in-depth and engaging material on any given topic. For this task, you will be generating detailed content for the lesson '{lesson_name}' which is part of the module '{module_name}' in the course '{course_name}'. Your goal is to provide a comprehensive and learner-friendly exploration of this specific topic, covering all relevant concepts, theories, and practical applications, as if you were an experienced instructor teaching the material.
-
-                                To ensure the content is effective and aligns with best practices in instructional design, you will follow Bloom's Taxonomy approach. This means structuring the material in a way that progressively builds learners' knowledge and skills, starting from foundational concepts and working up to higher-order thinking and application. Your response should be verbose, with in-depth explanations, multiple examples, and a conversational tone that mimics an instructor's teaching style.
-
-                                The structure of your response should include (but NOT limited to) the following elements:
-
-                                1) Introduce the topic and provide context, explaining its relevance and importance within the broader course and domain, as an instructor would do in a classroom setting.
-                                2) Define and clarify key terms, concepts, and principles related to the topic, with detailed explanations, analogies, and examples to aid comprehension.
-                                3) Present thorough, step-by-step explanations of the concepts, using real-world scenarios, visual aids, and analogies to ensure learners grasp the material.
-                                4) Discuss real-world applications, case studies, or scenarios that demonstrate the practical implications of the topic, drawing from industry best practices and authoritative sources.
-                                5) Incorporate interactive elements, such as reflective questions, exercises, or problem-solving activities, to engage learners and reinforce their understanding, as an instructor would do in a classroom.
-                                6) Seamlessly integrate relevant tangential concepts or background information as needed to provide a well-rounded learning experience, ensuring learners have the necessary foundational knowledge.
-                                7) Maintain a conversational, approachable tone while ensuring accuracy and depth of content, as if you were an experienced instructor teaching the material.
-
-                                Remember, the goal is to create a comprehensive and self-contained learning resource on the specified topic, with the level of detail and instructional quality that one would expect from an expert instructor. Your output should be formatted using Markdown for clarity and easy integration into course platforms.
-                                Note: Add a blank line at the end of the course content.
-                                Make sure the content generated is easily convertible to a sensible using HTML Tags.
-                                """
-                                with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
-                                    response = client.chat.completions.create(
-                                        model=st.session_state["ai_model"],
-                                        messages=[
-                                            {"role": "system", "content": module_lesson_prompt},
-                                            # {"role": "user", "content": st.session_state['course_outline']},
-                                        ]
-                                    )
-                                    complete_course = response.choices[0].message.content
-                                    st.success(f"Generated content for {module_name}, {lesson_name}")
-
-                                    with st.expander("Click to view!"):
-                                        st.write(complete_course)
-                                    
-                                    module_content +=  complete_course + "\n"*2
-                            quizzy_prompt_final = QUIZZY_PROMPT + module_content
-                            with st.spinner(f"Generating quiz questions for {module_name}"):
-                                res = client.chat.completions.create(
-                                    model=st.session_state["ai_model"],
-                                    messages=[
-                                        {"role": "system", "content": quizzy_prompt_final},
-                                        # {"role": "user", "content": st.session_state['course_outline']},
-                                    ]
-                                )
-                                quiz_questions = res.choices[0].message.content
-
-                                st.success(f"Quiz time!! Generated quiz questions for {module_name}")
-                                with st.expander("Click to view!"):
-                                    st.write(quiz_questions)
-
-
-                                if "pdf" not in st.session_state:
-                                    complete_course_content = module_content + "\n\n" + quiz_questions
-                                    st.session_state.pdf = generate_pdf(complete_course_content, "course.pdf")
-                                    b64 = base64.b64encode(st.session_state.pdf.output(dest="S").encode('latin1')).decode()
-                                    st.success("Your PDF file is ready!")
-
-                                button_label = "Download PDF"
-                                st.download_button(label=button_label, data=b64, file_name="course.pdf", mime="application/pdf", key="download_pdf_button", help="Click me to download PDF 😌")
-
-                            break
-
-
+                except:
+                    st.warning("PDF 생성 중 오류가 발생했습니다. HTML 형식을 사용해주세요.")
+    
     else:
-        st.write("Your generated content will appear here.")
+        st.info("👈 왼쪽에서 설정을 입력하고 '컨텐츠 생성' 버튼을 클릭하세요.")
 
 # Save chat history after each interaction
 save_chat_history(st.session_state.messages)

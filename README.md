@@ -1,103 +1,81 @@
-<h1 align="center">Automated Course Content Generator 🤖</h1>
+# 🇰🇷 초등 디지털 교과서 컨텐츠 생성기
 
-<p align="center">
-Empower your teaching with AI-driven course creation!
-</p>
+한국 초등학교 교육과정에 맞춘 AI 기반 디지털 교과서 컨텐츠 생성 도구입니다.
 
-## 📘 Introduction
+## 📚 주요 기능
 
-The Automated Course Content Generator (ACCG) is an AI-based Streamlit application developed to assist SMEs, Content Creators, and Educators in creating detailed and comprehensive course content effortlessly. By inputting key parameters such as Course Name, Target Audience Education Level, Course Difficulty Level, and Course Credit, users receive a dynamically generated course outline. This tool also generates quiz questions and provides the complete course content in a downloadable PDF format, as well as PPT! (New)
+- **과목 지원**: 영어, 수학
+- **학년별 맞춤**: 1학년부터 6학년까지 학년별 수준 조정
+- **다양한 컨텐츠 유형**:
+  - 개념 설명 및 시각 자료
+  - 예시 문제와 연습 활동
+  - 상호작용 학습 활동
+  - 퀴즈 및 평가 문제
+  - 게임형 학습 컨텐츠
+- **내보내기 형식**: HTML, PDF 지원
 
-## 🤖 Meet ACCG
+## 🚀 설치 및 실행
 
-ACCG uses advanced language models like GPT-3.5 Turbo/4 Turbo and Meta’s LLama-3-70B-Instruct. It simplifies the process of generating tailored educational content, making course design more efficient and effective.
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-%233776AB.svg?style=for-the-badge&logo=Python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/OpenAI-%23FFFFFF.svg?style=for-the-badge&logo=OpenAI&logoColor=black" alt="OpenAI">
-  <img src="https://img.shields.io/badge/Streamlit-%23FF0000.svg?style=for-the-badge&logo=Streamlit&logoColor=red&color=white" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Meta-LLama--3-%233776AB.svg?style=for-the-badge&logo=Meta&logoColor=white" alt="Meta LLama-3">
-</p>
+### Windows
 
-## Checkout the demo here!
-## 👉 [ACCG-Demo](https://www.veed.io/view/fd48948d-6db0-4411-ada7-cfd40ffb19d4?panel=share)
-Next Version of ACCG -> Automated Course Development (ACD) with additional features and functionalities is coming soon! 
-
-
-## 🌟 Features
-
-- **Interactive Course Customization** 🎨: Input your course details to generate a customized outline.
-- **Detailed Content Generation** 📝: Create comprehensive content for each module and lesson.
-- **Quiz Generation** 🧩: Automatically generate quizzes for each module based on the module content.
-- **PDF Export** 📄: Download the complete course content as a neatly formatted PDF.
-- **PPT Export (New!)** 📄: Download the complete course content as a neatly formatted PPT.
-- **LATEX**
-
-## 📝 Functionality
-
-The ACCG leverages advanced language models and intelligent algorithms to generate detailed and engaging course content. Users can input specific parameters and generate tailored educational material, including outlines, lessons, and quizzes. The tool streamlines the course creation process, making it more efficient and user-friendly.
-
-## 🚀 Usage
-
-1. **Open the Application**: Navigate to the Streamlit app in your browser.
-2. **Enter Course Details**: Fill in the course name, target audience education level, difficulty level, number of modules, course duration, and course credit.
-3. **Generate Course Outline**: Click the "Generate Course Outline" button to create a comprehensive course outline.
-4. **View and Modify Content**: Review the generated content and make any necessary modifications.
-5. **Generate Complete Course**: Once satisfied, generate the complete course content.
-6. **Download PDF**: Download the generated course content as a PDF file.
-
-## 🏆 Project Details
-
-### Tech Stack
-
-- **Python** 🐍
-- **Streamlit** 📊
-- **OpenAI's GPT-3.5 Turbo/4 Turbo** 🤖
-- **Meta’s LLama-3-70B-Instruct** 🦙
-- **Mega prompting** ✨
-- **GitHub** 🐙
-- **VS-Code** 💻
-
-## Project Structure
-
-```plaintext
-automated-course-content-generator/
-│
-├── prompts/
-│   ├── tabler_prompt.py
-│   ├── dictator_prompt.py
-│   └── quizzy_prompt.py
-│
-├── app.py
-├── README.md
-├── requirements.txt
-└── .env.example
+```bash
+install_and_run.bat
 ```
 
-### Key Contributions and Achievements 🌟
+### macOS/Linux
 
-- Led the development of the Streamlit application, ensuring a seamless user experience.
-- Collaborated with team members to optimize code efficiency and maintainability.
-- Implemented Prompt Engineering techniques to enhance AI-generated content quality.
-- Contributed to version control and project management on GitHub.
+```bash
+chmod +x install_and_run.sh
+./install_and_run.sh
+```
 
-### Impact and Results 🚀
+### 수동 설치
 
-#### Quantitative Outcomes 📊
+```bash
+# 가상환경 생성
+python -m venv venv
 
-- Increased course creation efficiency.
-- Achieving a 70-80% reduction in course development time.
+# 가상환경 활성화 (Windows)
+venv\Scripts\activate
 
-#### Qualitative Outcomes 💡
+# 가상환경 활성화 (macOS/Linux)
+source venv/bin/activate
 
-- Enhanced course quality through Bloom’s Taxonomy and relevance through AI-generated content suggestions.
-- Empowered users to tailor courses to specific audience needs and educational levels.
-- Streamlined the course creation process, resulting in higher user satisfaction.
+# 패키지 설치
+pip install -r requirements.txt
 
-## ⚖️ License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+# 앱 실행
+streamlit run app.py
+```
 
+## ⚙️ 환경 설정
 
+`.env` 파일을 생성하고 다음 API 키를 설정하세요:
 
-<!--## ⚖️ License
+```
+OPENAI_API_KEY=your_openai_api_key
+# 또는
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.--!>
+## 📖 사용 방법
+
+1. 앱을 실행하고 브라우저에서 `http://localhost:8501` 접속
+2. 왼쪽 패널에서 과목, 학년, 학기 선택
+3. 단원명과 학습 목표 입력
+4. 포함할 컨텐츠 유형 선택
+5. "컨텐츠 생성" 버튼 클릭
+6. 생성된 컨텐츠를 HTML 또는 PDF로 다운로드
+
+## 🎯 특징
+
+- **한국 교육과정 준수**: 교육부 초등 교육과정 기준 적용
+- **학습자 중심**: 연령별 인지 발달 수준 고려
+- **상호작용성**: 디지털 환경의 장점을 활용한 인터랙티브 컨텐츠
+- **시각적 학습**: 이미지와 그래픽을 활용한 이해도 향상
+- **즉각적 피드백**: 퀴즈와 활동에 대한 실시간 피드백 제공
+
+## 📄 라이선스
+
+MIT License
