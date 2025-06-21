@@ -20,7 +20,7 @@ class ContentDisplayUI:
     @staticmethod
     def render(config: Dict[str, Any]) -> None:
         """메인 컨텐츠 영역 렌더링"""
-        st.header("생성된 교과서 컨텐츠 📝")
+        st.markdown('<h2 class="content-header">생성된 교과서 컨텐츠 📝</h2>', unsafe_allow_html=True)
         
         # 컨텐츠 생성 버튼이 클릭되었을 때
         if config.get("generate_button") and not SessionManager.get_session_value("content_generated"):

@@ -15,35 +15,34 @@ class SidebarUI:
     @staticmethod
     def render() -> Dict[str, Any]:
         """사이드바 렌더링 및 설정값 반환"""
-        with st.sidebar:
-            # 대화 기록 삭제 버튼
-            if st.button("대화 기록 삭제"):
-                SessionManager.clear_chat_history()
-            
-            st.header("교과서 설정 📋")
-            
-            # AI 설정
-            ai_config = SidebarUI._render_ai_settings()
-            
-            st.divider()
-            
-            # 교과서 설정
-            course_config = SidebarUI._render_course_settings()
-            
-            # 버튼 렌더링
-            buttons = SidebarUI._render_buttons()
-            
-            # 모든 설정 통합
-            config = {
-                **ai_config,
-                **course_config,
-                **buttons
-            }
-            
-            # 세션에 저장
-            SessionManager.save_course_config(config)
-            
-            return config
+        # 대화 기록 삭제 버튼
+        if st.button("대화 기록 삭제"):
+            SessionManager.clear_chat_history()
+        
+        st.header("교과서 설정 📋")
+        
+        # AI 설정
+        ai_config = SidebarUI._render_ai_settings()
+        
+        st.divider()
+        
+        # 교과서 설정
+        course_config = SidebarUI._render_course_settings()
+        
+        # 버튼 렌더링
+        buttons = SidebarUI._render_buttons()
+        
+        # 모든 설정 통합
+        config = {
+            **ai_config,
+            **course_config,
+            **buttons
+        }
+        
+        # 세션에 저장
+        SessionManager.save_course_config(config)
+        
+        return config
     
     @staticmethod
     def _render_ai_settings() -> Dict[str, str]:
