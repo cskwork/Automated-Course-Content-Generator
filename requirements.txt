@@ -1,4 +1,4 @@
-streamlit>=1.46.0
+streamlit==1.12.0
 python-dotenv~=1.0.1
 openai~=1.23.6
 ollama~=0.2.0
@@ -21,3 +21,7 @@ diffusers==0.25.0
 # NOTE: xformers는 GPU/CUDA 전용이므로 CPU 환경에서는 설치하지 마세요
 # xformers는 선택사항이며 없어도 diffusers가 정상 작동합니다
 # GPU 환경에서만: pip install xformers --index-url https://download.pytorch.org/whl/cu121
+
+weasyprint==54.3
+beautifulsoup4==4.12.3
+streamlit-quill==0.0.3

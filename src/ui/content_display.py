@@ -15,6 +15,7 @@ from src.service.ppt_generator import ppt_generator
 from src.utils.session_manager import SessionManager
 from src.utils.validators import Validators
 from src.config.settings import settings
+from streamlit_quill import st_quill
 
 
 class ContentDisplayUI:
@@ -192,8 +193,53 @@ class ContentDisplayUI:
         if is_presentation:
             st.markdown("### 🎯 생성된 슬라이드")
             
+            # 편집 모드 관리 (슬라이드용)
+            is_editing_slide = SessionManager.get_session_value("is_editing_slide", False)
+            button_text_slide = "✏️ 편집 모드 닫기" if is_editing_slide else "✏️ 슬라이드 HTML 편집하기"
+            
+            if st.button(button_text_slide, key="edit_toggle_slide"):
+                new_state = not is_editing_slide
+                SessionManager.set_session_value("is_editing_slide", new_state)
+                
+                # 편집 모드 진입 시, st.session_state에 현재 컨텐츠를 저장
+                if new_state:
+                    st.session_state.slide_editor_quill = generated_content
+                # 편집 모드 종료 시 (저장 안 함), st.session_state 정리
+                elif "slide_editor_quill" in st.session_state:
+                    del st.session_state.slide_editor_quill
+                
+                st.experimental_rerun()
+
+            if is_editing_slide:
+                st.info("아래 텍스트 상자에서 슬라이드의 HTML을 직접 수정할 수 있습니다. 수정 후 '변경사항 저장' 버튼을 클릭하세요.")
+                
+                # st.session_state의 값을 value로 명시적으로 전달
+                edited_content_slide = st_quill(
+                    value=st.session_state.get("slide_editor_quill", ""),
+                    html=True,
+                    key="slide_editor_quill"
+                )
+
+                if st.button("💾 변경사항 저장", key="save_changes_slide"):
+                    # st_quill의 반환값(최신 편집 내용)을 저장
+                    # 슬라이드는 전체 HTML 구조를 유지해야 하므로 직접 저장
+                    SessionManager.set_session_value("generated_content", st.session_state.slide_editor_quill)
+                    SessionManager.set_session_value("is_editing_slide", False)
+                    # 상태 정리
+                    if "slide_editor_quill" in st.session_state:
+                        del st.session_state.slide_editor_quill
+                    st.success("슬라이드가 성공적으로 업데이트되었습니다!")
+                    st.experimental_rerun()
+                
+                if st.button("❌ 편집 취소", key="cancel_edit_slide"):
+                    SessionManager.set_session_value("is_editing_slide", False)
+                    # 상태 정리
+                    if "slide_editor_quill" in st.session_state:
+                        del st.session_state.slide_editor_quill
+                    st.experimental_rerun()
+
             # 슬라이드 미리보기
-            with st.expander("슬라이드 미리보기", expanded=True):
+            with st.expander("슬라이드 미리보기", expanded=not is_editing_slide):
                 # 슬라이드 HTML을 iframe으로 표시
                 components.html(generated_content, height=600, scrolling=True)
             
@@ -208,8 +254,57 @@ class ContentDisplayUI:
             
             return
         
+        # 편집 모드 관리
+        is_editing = SessionManager.get_session_value("is_editing", False)
+
+        button_text = "✏️ 편집 모드 닫기" if is_editing else "✏️ 컨텐츠 편집하기"
+        if st.button(button_text, key="edit_toggle"):
+            new_state = not is_editing
+            SessionManager.set_session_value("is_editing", new_state)
+
+            # 편집 모드 진입 시, st.session_state에 현재 컨텐츠를 저장
+            if new_state:
+                st.session_state.content_editor_quill = generated_content
+            # 편집 모드 종료 시 (저장 안 함), st.session_state 정리
+            elif "content_editor_quill" in st.session_state:
+                del st.session_state.content_editor_quill
+            
+            st.experimental_rerun()
+
+        if is_editing:
+            st.info("아래 텍스트 상자에서 HTML 형식의 콘텐츠를 직접 수정할 수 있습니다. 수정 후 '변경사항 저장' 버튼을 클릭하세요.")
+            
+            # st.session_state의 값을 value로 명시적으로 전달
+            edited_content = st_quill(
+                value=st.session_state.get("content_editor_quill", ""),
+                html=True,
+                key="content_editor_quill"
+            )
+
+            if st.button("💾 변경사항 저장", key="save_changes"):
+                # st_quill의 반환값(최신 편집 내용)을 저장
+                edited_body = st.session_state.content_editor_quill
+                
+                # 스타일이 포함된 전체 HTML로 재구성
+                full_html_content = export_service.get_full_html_template(edited_body)
+                
+                SessionManager.set_session_value("generated_content", full_html_content)
+                SessionManager.set_session_value("is_editing", False)
+                # 상태 정리
+                if "content_editor_quill" in st.session_state:
+                    del st.session_state.content_editor_quill
+                st.success("콘텐츠가 성공적으로 업데이트되었습니다!")
+                st.experimental_rerun()
+            
+            if st.button("❌ 편집 취소", key="cancel_edit"):
+                SessionManager.set_session_value("is_editing", False)
+                # 상태 정리
+                if "content_editor_quill" in st.session_state:
+                    del st.session_state.content_editor_quill
+                st.experimental_rerun()
+        
         # 기존 방식 (일반 교과서 컨텐츠)
-        with st.expander("생성된 컨텐츠 미리보기"):
+        with st.expander("생성된 컨텐츠 미리보기", expanded=not is_editing):
             # HTML 컨텐츠를 위한 전체 스타일과 함께 렌더링
             full_html = f"""
             <!DOCTYPE html>
