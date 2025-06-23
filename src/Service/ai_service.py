@@ -7,13 +7,13 @@ import ollama
 import streamlit as st
 import time
 
-from src.Config.settings import settings
-from src.Entity.content_types import Provider, CourseConfig, GeneratedContent
-from src.Utils.logger import content_logger
-from src.Prompts.elementary_english_prompt import ELEMENTARY_ENGLISH_PROMPT
-from src.Prompts.elementary_math_prompt import ELEMENTARY_MATH_PROMPT
-from src.Prompts.interactive_content_prompt import INTERACTIVE_CONTENT_PROMPT
-from src.Prompts.quiz_generator_prompt import QUIZ_GENERATOR_PROMPT
+from src.config.settings import settings
+from src.entity.content_types import Provider, CourseConfig, GeneratedContent
+from src.utils.logger import content_logger
+from src.prompts.elementary_english_prompt import ELEMENTARY_ENGLISH_PROMPT
+from src.prompts.elementary_math_prompt import ELEMENTARY_MATH_PROMPT
+from src.prompts.interactive_content_prompt import INTERACTIVE_CONTENT_PROMPT
+from src.prompts.quiz_generator_prompt import QUIZ_GENERATOR_PROMPT
 
 
 class AIService:

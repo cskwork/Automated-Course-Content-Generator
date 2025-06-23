@@ -21,7 +21,7 @@ try:
 except ImportError:
     PPTX_AVAILABLE = False
 
-from src.Service.image_service import image_service
+from src.service.image_service import image_service
 
 
 class PPTGenerator:

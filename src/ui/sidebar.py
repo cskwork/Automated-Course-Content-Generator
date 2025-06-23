@@ -5,9 +5,9 @@ import streamlit as st
 from typing import Dict, Any
 import torch
 
-from src.Config.settings import settings
-from src.Utils.session_manager import SessionManager
-from src.Service.ai_service import ai_service
+from src.config.settings import settings
+from src.utils.session_manager import SessionManager
+from src.service.ai_service import ai_service
 
 
 class SidebarUI:
@@ -30,14 +30,14 @@ class SidebarUI:
             # 환경 변수 다시 로드
             from dotenv import load_dotenv
             load_dotenv(override=True)
-            st.rerun()
+            st.experimental_rerun()
         
         st.header("교과서 설정 📋")
         
         # AI 설정
         ai_config = SidebarUI._render_ai_settings()
         
-        st.divider()
+        st.markdown("---")
         
         # 교과서 설정
         course_config = SidebarUI._render_course_settings()
@@ -86,7 +86,7 @@ class SidebarUI:
             
             SessionManager.update_ai_settings(selected_provider, default_model_for_provider)
             ai_service.initialize_client(selected_provider)
-            st.rerun()  # UI 즉시 업데이트를 위한 rerun
+            st.experimental_rerun()  # UI 즉시 업데이트를 위한 rerun
         
         # 모델 선택
         model_options = settings.MODEL_OPTIONS.get(selected_provider, [])
@@ -172,7 +172,7 @@ class SidebarUI:
             help="컨텐츠에 포함될 이미지 생성 방법을 선택하세요."
         )
 
-        local_files_only = st.toggle(
+        local_files_only = st.checkbox(
             "로컬 캐시 모델만 사용",
             value=False,
             help="활성화하면 모델을 새로 다운로드하지 않고 로컬 캐시 파일만 사용합니다. 모델이 미리 다운로드된 경우 유용합니다."
@@ -203,25 +203,23 @@ class SidebarUI:
     @staticmethod
     def _render_buttons() -> Dict[str, bool]:
         """버튼 렌더링"""
-        button1, button2 = st.columns([1, 0.8])
+        # 컨텐츠 생성 버튼
+        generate_button = st.button(
+            "컨텐츠 생성", 
+            help="클릭하여 디지털 교과서 컨텐츠를 생성하세요! 🎯"
+        )
         
-        with button1:
-            generate_button = st.button(
-                "컨텐츠 생성", 
-                help="클릭하여 디지털 교과서 컨텐츠를 생성하세요! 🎯"
+        # 새 컨텐츠 버튼 (조건부)
+        new_content_button = False
+        if SessionManager.get_session_value("content_generated"):
+            new_content_button = st.button(
+                "새 컨텐츠", 
+                help="새로운 컨텐츠를 만들어보세요! 💡"
             )
-        
-        with button2:
-            new_content_button = False
-            if SessionManager.get_session_value("content_generated"):
-                new_content_button = st.button(
-                    "새 컨텐츠", 
-                    help="새로운 컨텐츠를 만들어보세요! 💡"
-                )
-                
-                if new_content_button:
-                    SessionManager.reset_content_generation()
-                    st.rerun()
+            
+            if new_content_button:
+                SessionManager.reset_content_generation()
+                st.experimental_rerun()
         
         return {
             "generate_button": generate_button,

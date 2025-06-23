@@ -9,9 +9,9 @@ echo "========================================"
 # Python 설치 확인
 if ! command -v python3 &> /dev/null; then
     echo "[ERROR] Python3가 설치되지 않았습니다."
-    echo "Python 3.12 이상을 설치해주세요:"
-    echo "macOS: brew install python@3.12"
-    echo "Ubuntu: sudo apt update && sudo apt install python3.12 python3.12-venv"
+    echo "Python 3.9 이상을 설치해주세요:"
+    echo "macOS: brew install python@3.10"
+    echo "Ubuntu: sudo apt update && sudo apt install python3.10 python3.10-venv"
     exit 1
 fi
 
@@ -44,23 +44,36 @@ pip install -r requirements.txt
 if [[ "$PLATFORM" == "Darwin" ]]; then
     if [[ "$ARCH" == "arm64" ]]; then
         # Apple Silicon (M1/M2/M3)
-        echo "[INFO] Apple Silicon용 PyTorch 설치 중..."
-        pip uninstall -y torch torchvision torchaudio
-        pip install torch torchvision torchaudio
+        echo "[INFO] Apple Silicon용 PyTorch 확인 중..."
+        if ! python3 -c "import torch" 2>/dev/null; then
+            echo "[INFO] PyTorch가 설치되지 않았습니다. 설치 중..."
+            pip install torch torchvision torchaudio
+        else
+            echo "[INFO] PyTorch가 이미 설치되어 있습니다."
+        fi
         echo "[SUCCESS] Apple Silicon 최적화 PyTorch가 설치되었습니다."
     else
         # Intel Mac
-        echo "[INFO] Intel Mac용 PyTorch 설치 중..."
-        pip uninstall -y torch torchvision torchaudio
-        pip install torch torchvision torchaudio
+        echo "[INFO] Intel Mac용 PyTorch 확인 중..."
+        if ! python3 -c "import torch" 2>/dev/null; then
+            echo "[INFO] PyTorch가 설치되지 않았습니다. 설치 중..."
+            pip install torch torchvision torchaudio
+        else
+            echo "[INFO] PyTorch가 이미 설치되어 있습니다."
+        fi
         echo "[SUCCESS] Intel Mac용 PyTorch가 설치되었습니다."
     fi
 elif [[ "$PLATFORM" == "Linux" ]]; then
     # NVIDIA GPU 확인 (Linux)
     if command -v nvidia-smi &> /dev/null; then
-        echo "[SUCCESS] NVIDIA GPU가 감지되었습니다. CUDA 버전을 설치합니다."
-        pip uninstall -y torch torchvision torchaudio
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        echo "[SUCCESS] NVIDIA GPU가 감지되었습니다. CUDA 버전을 확인합니다."
+        if ! python3 -c "import torch; torch.cuda.is_available()" 2>/dev/null; then
+            echo "[INFO] CUDA PyTorch가 설치되지 않았습니다. 설치 중..."
+            pip uninstall -y torch torchvision torchaudio
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        else
+            echo "[INFO] CUDA PyTorch가 이미 설치되어 있습니다."
+        fi
         echo "[SUCCESS] PyTorch CUDA 버전이 설치되었습니다."
         
         # xformers 설치 (메모리 최적화)
@@ -72,9 +85,13 @@ elif [[ "$PLATFORM" == "Linux" ]]; then
             echo "[SUCCESS] xformers가 설치되었습니다."
         fi
     else
-        echo "[INFO] NVIDIA GPU가 감지되지 않았습니다. CPU 버전을 사용합니다."
-        pip uninstall -y torch torchvision torchaudio
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        echo "[INFO] NVIDIA GPU가 감지되지 않았습니다. CPU 버전을 확인합니다."
+        if ! python3 -c "import torch" 2>/dev/null; then
+            echo "[INFO] CPU PyTorch가 설치되지 않았습니다. 설치 중..."
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        else
+            echo "[INFO] CPU PyTorch가 이미 설치되어 있습니다."
+        fi
         echo "[SUCCESS] PyTorch CPU 버전이 설치되었습니다."
     fi
 fi

@@ -8,8 +8,8 @@ from fpdf import FPDF  # type: ignore
 import streamlit as st
 import markdown2
 
-from src.Entity.content_types import ExportFormat
-from src.Config.settings import settings
+from src.entity.content_types import ExportFormat
+from src.config.settings import settings
 
 
 class ExportService:
@@ -248,38 +248,8 @@ class ExportService:
         
         return filepath
     
-    @staticmethod
-    def create_download_buttons(content: str, format_type: str) -> None:
-        """다운로드 버튼 생성"""
-        col1, col2 = st.columns(2)
-        
-        if format_type in [ExportFormat.HTML.value, ExportFormat.BOTH.value]:
-            with col1:
-                # HTML 파일 생성
-                html_file = ExportService.generate_html(content, "digital_textbook.html")
-                with open(html_file, 'r', encoding='utf-8') as f:
-                    html_data = f.read()
-                st.download_button(
-                    label="HTML로 다운로드 🌐",
-                    data=html_data,
-                    file_name="digital_textbook.html",
-                    mime="text/html"
-                )
-        
-        if format_type in [ExportFormat.PDF.value, ExportFormat.BOTH.value]:
-            with col2:
-                try:
-                    # PDF 생성
-                    pdf = ExportService.generate_pdf(content, "digital_textbook.pdf")
-                    b64 = base64.b64encode(pdf.output(dest="S").encode('latin1')).decode()
-                    st.download_button(
-                        label="PDF로 다운로드 📄",
-                        data=b64,
-                        file_name="digital_textbook.pdf",
-                        mime="application/pdf"
-                    )
-                except Exception as e:
-                    st.warning(f"PDF 생성 중 오류가 발생했습니다: {str(e)}. HTML 형식을 사용해주세요.")
+    # 주석: create_download_buttons 메서드는 사용되지 않으므로 제거됨
+    # ContentDisplayUI._create_basic_download_buttons 메서드를 사용함
     
     @staticmethod
     def format_full_content(config: dict, generated_content: dict) -> str:

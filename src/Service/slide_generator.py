@@ -12,15 +12,15 @@ from pathlib import Path
 # 프롬프트 import
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from src.Prompts.slide_prompt import get_slide_optimization_prompt
-from src.Service.image_service import image_service
+from src.prompts.slide_prompt import get_slide_optimization_prompt
+from src.service.image_service import image_service
 
 
 class SlideGenerator:
     """슬라이드 생성 클래스"""
     
     def __init__(self, ai_client=None):
-        self.template_path = Path(__file__).parent.parent / "templates" / "slide_template.html"
+        self.template_path = Path(__file__).parent.parent / "ui" / "slide_template.html"
         self.ai_client = ai_client
         self.image_generator = "Unsplash"
         self.subject = "default"

@@ -14,7 +14,7 @@ import logging
 from urllib3.exceptions import MaxRetryError, NameResolutionError
 from requests.exceptions import ConnectionError
 
-from src.Entity.content_types import ImageInfo
+from src.entity.content_types import ImageInfo
 
 
 class StableDiffusionGenerator:

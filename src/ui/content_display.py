@@ -6,15 +6,15 @@ import streamlit.components.v1 as components
 import html
 from typing import Dict, Any
 
-from src.Entity.content_types import CourseConfig, GeneratedContent
-from src.Service.ai_service import ai_service
-from src.Service.image_service import image_service
-from src.Service.export_service import export_service
-from src.Service.slide_generator import slide_generator
-from src.Service.ppt_generator import ppt_generator
-from src.Utils.session_manager import SessionManager
-from src.Utils.validators import Validators
-from src.Config.settings import settings
+from src.entity.content_types import CourseConfig, GeneratedContent
+from src.service.ai_service import ai_service
+from src.service.image_service import image_service
+from src.service.export_service import export_service
+from src.service.slide_generator import slide_generator
+from src.service.ppt_generator import ppt_generator
+from src.utils.session_manager import SessionManager
+from src.utils.validators import Validators
+from src.config.settings import settings
 
 
 class ContentDisplayUI:
@@ -148,7 +148,7 @@ class ContentDisplayUI:
                 
                 success_text = "슬라이드가 성공적으로 생성되었습니다! 🎯" if is_presentation_only else "컨텐츠가 성공적으로 생성되었습니다! ✨"
                 st.success(success_text)
-                st.rerun()
+                st.experimental_rerun()
                 
             except Exception as e:
                 st.error(f"컨텐츠 생성 중 오류가 발생했습니다: {str(e)}")
@@ -323,15 +323,13 @@ class ContentDisplayUI:
         
         # 추가 다운로드 옵션
         st.markdown("#### 🎯 추가 다운로드 옵션")
-        col1, col2 = st.columns(2)
         
-        with col1:
-            if st.button("🎬 슬라이드 HTML 다운로드"):
-                ContentDisplayUI._download_slide_html()
-        
-        with col2:
-            if st.button("📄 PPT 다운로드"):
-                ContentDisplayUI._download_ppt()
+        # 버튼들을 수직으로 배치 (컬럼 중첩 방지)
+        if st.button("🎬 슬라이드 HTML 다운로드"):
+            ContentDisplayUI._download_slide_html()
+            
+        if st.button("📄 PPT 다운로드"):
+            ContentDisplayUI._download_ppt()
     
     @staticmethod
     def _show_slide_view() -> None:
@@ -531,7 +529,7 @@ class ContentDisplayUI:
     @staticmethod
     def _create_basic_download_buttons(content: str, format_type: str) -> None:
         """기본 다운로드 버튼 생성 (컬럼 중첩 방지)"""
-        from src.Entity.content_types import ExportFormat
+        from src.entity.content_types import ExportFormat
         
         # HTML 다운로드
         if format_type in [ExportFormat.HTML.value, ExportFormat.BOTH.value]:

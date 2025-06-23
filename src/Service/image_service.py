@@ -6,8 +6,8 @@ from typing import List, Optional
 import requests
 import streamlit as st
 
-from src.Config.settings import settings
-from src.Entity.content_types import ImageInfo
+from src.config.settings import settings
+from src.entity.content_types import ImageInfo
 from .stable_diffusion_generator import stable_diffusion_generator
 from .kandinsky_generator import kandinsky_generator
 
